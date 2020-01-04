@@ -6,16 +6,19 @@ pub trait Lexer<'input, 'idt> {
     fn parse_keyword(&mut self, kw: Option<Keyword>) -> Option<TokenValue<Keyword>>;
 
     fn parse_ident(&mut self) -> Option<TokenValue<Str<'idt>>>;
-    
+
     fn parse_str(&mut self) -> Option<TokenValue<&'input str>>;
-    
+
     fn parse_int(&mut self) -> Option<TokenValue<u128>>;
-    
+
     fn parse_float(&mut self) -> Option<TokenValue<f64>>;
-    
+
     fn parse_sym(&mut self, sym: Option<Symbol>) -> Option<TokenValue<Symbol>>;
-    
-    fn parse_grouping(&mut self, grouping: Option<(GroupPos, Grouping)>) -> Option<TokenValue<(GroupPos, Grouping)>>;
+
+    fn parse_grouping(
+        &mut self,
+        grouping: Option<(GroupPos, Grouping)>,
+    ) -> Option<TokenValue<(GroupPos, Grouping)>>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -30,7 +33,7 @@ pub type Token<'input, 'idt> = TokenValue<Type<'input, 'idt>>;
 pub struct TokenValue<Type> {
     pub ty: Type,
     pub leading_whitespace: Span,
-    pub span: Span
+    pub span: Span,
 }
 
 impl Span {
@@ -43,7 +46,7 @@ impl Span {
     pub const fn start(&self) -> usize {
         self.start
     }
-    
+
     pub const fn end(&self) -> usize {
         self.end
     }
@@ -63,14 +66,14 @@ pub enum Type<'input, 'idt> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GroupPos {
     Start,
-    End
+    End,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Grouping {
     Paren,
     Square,
-    Curly
+    Curly,
 }
 
 macro_rules! sym_gen {
@@ -162,7 +165,7 @@ sym_gen! {
     (#) => Pound
     ($) => Dollar
     (?) => Question
-    
+
     (!) => Exclaim
     (&) => BitAnd
     (|) => BitOr
@@ -191,18 +194,18 @@ kw_gen! {
 
     match => Match
     loop => Loop
-    
+
     break => Break
     continue => Continue
     return => Return
-    
+
     if => If
     else => Else
     while => While
-    
+
     static => Static
     comp => Comp
-    
+
     struct => Struct
     enum => Enum
     union => Union

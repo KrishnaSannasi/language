@@ -1,5 +1,5 @@
-use core::cell::{UnsafeCell, Cell};
-use std::alloc::{Layout, alloc, dealloc, handle_alloc_error};
+use core::cell::{Cell, UnsafeCell};
+use std::alloc::{alloc, dealloc, handle_alloc_error, Layout};
 
 pub struct LocalUniqueArena<T, const N: usize> {
     current: Cell<*mut T>,
@@ -21,18 +21,17 @@ impl<T, const N: usize> LocalUniqueArena<T, N> {
     pub fn new() -> Self {
         assert!(N != 0, "Cannot use empty slabs for an arena");
 
-        let current = unsafe {
-            alloc(Layout::new::<[T; N]>())
-        };
+        let current = unsafe { alloc(Layout::new::<[T; N]>()) };
 
         if current.is_null() {
             handle_alloc_error(Layout::new::<[T; N]>())
         }
 
         let current = Cell::new(current as *mut T);
-        
+
         Self {
-            current, len: Cell::new(0),
+            current,
+            len: Cell::new(0),
             data: UnsafeCell::default(),
         }
     }
@@ -46,7 +45,7 @@ impl<T, const N: usize> LocalUniqueArena<T, N> {
             } else {
                 let len = self.len.get();
                 let current = self.current.get().add(len);
-                
+
                 current.write(value);
 
                 self.len.set(len + 1);
@@ -86,13 +85,10 @@ unsafe impl<#[may_dangle] T, const N: usize> Drop for LocalUniqueArena<T, N> {
         unsafe {
             std::ptr::drop_in_place(std::slice::from_raw_parts_mut(
                 self.current.get(),
-                self.len.get()
+                self.len.get(),
             ));
 
-            dealloc(
-                self.current.get() as _,
-                Layout::new::<[T; N]>(),
-            );
+            dealloc(self.current.get() as _, Layout::new::<[T; N]>());
         }
     }
 }

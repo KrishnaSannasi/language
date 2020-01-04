@@ -1,9 +1,9 @@
 #![feature(hash_set_entry)]
 
-use std::ptr::NonNull;
-use std::marker::PhantomData;
-use std::alloc::{alloc, dealloc, Layout, handle_alloc_error};
+use std::alloc::{alloc, dealloc, handle_alloc_error, Layout};
 use std::collections::HashSet;
+use std::marker::PhantomData;
+use std::ptr::NonNull;
 
 use parking_lot::RwLock;
 
@@ -22,7 +22,7 @@ struct OwnStr(NonNull<()>);
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Str<'a> {
     ptr: NonNull<()>,
-    mark: PhantomData<&'a StrInner>
+    mark: PhantomData<&'a StrInner>,
 }
 
 #[derive(Default)]
@@ -37,12 +37,10 @@ impl OwnStr {
 
             let len = ptr.cast::<usize>().read();
 
-            std::str::from_utf8_unchecked(
-                std::slice::from_raw_parts(
-                    ptr.cast::<u8>().add(USIZE_SIZE),
-                    len
-                )
-            )
+            std::str::from_utf8_unchecked(std::slice::from_raw_parts(
+                ptr.cast::<u8>().add(USIZE_SIZE),
+                len,
+            ))
         }
     }
 }
@@ -110,12 +108,10 @@ impl std::ops::Deref for Str<'_> {
 
             let len = ptr.cast::<usize>().read();
 
-            std::str::from_utf8_unchecked(
-                std::slice::from_raw_parts(
-                    ptr.cast::<u8>().add(USIZE_SIZE),
-                    len
-                )
-            )
+            std::str::from_utf8_unchecked(std::slice::from_raw_parts(
+                ptr.cast::<u8>().add(USIZE_SIZE),
+                len,
+            ))
         }
     }
 }
@@ -152,28 +148,21 @@ impl Intern {
     fn insert_slow(&self, s: &str) -> Str<'_> {
         let mut inner = self.inner.write();
 
-        let own_str = inner.get_or_insert_with(
-            s,
-            |s: &str| unsafe {
-                let layout = Layout::from_size_align_unchecked(s.len() + USIZE_SIZE, USIZE_ALIGN);
-                let ptr = alloc(layout);
-    
-                let str_repr = match NonNull::new(ptr as *mut ()) {
-                    Some(ptr) => ptr,
-                    None => handle_alloc_error(layout),
-                };
-    
-                ptr.cast::<usize>().write(s.len());
-                
-                ptr.add(USIZE_SIZE)
-                    .copy_from(
-                        s.as_ptr(),
-                        s.len()
-                    );
-    
-                OwnStr(str_repr)
-            }
-        );
+        let own_str = inner.get_or_insert_with(s, |s: &str| unsafe {
+            let layout = Layout::from_size_align_unchecked(s.len() + USIZE_SIZE, USIZE_ALIGN);
+            let ptr = alloc(layout);
+
+            let str_repr = match NonNull::new(ptr as *mut ()) {
+                Some(ptr) => ptr,
+                None => handle_alloc_error(layout),
+            };
+
+            ptr.cast::<usize>().write(s.len());
+
+            ptr.add(USIZE_SIZE).copy_from(s.as_ptr(), s.len());
+
+            OwnStr(str_repr)
+        });
 
         Str {
             ptr: own_str.0,

@@ -1,10 +1,10 @@
-use lib_intern::Intern;
 use core_tokens::*;
+use lib_intern::Intern;
 use std::mem::replace;
 
 #[derive(Clone, Copy)]
 pub struct Context<'idt> {
-    pub intern: &'idt Intern
+    pub intern: &'idt Intern,
 }
 
 pub struct Lexer<'input, 'idt> {
@@ -16,7 +16,12 @@ pub struct Lexer<'input, 'idt> {
 
 impl<'input, 'idt> Lexer<'input, 'idt> {
     pub const fn new(input: &'input str, ctx: Context<'idt>) -> Self {
-        Self { ctx, input, start: 0, leading_whitespace: None }
+        Self {
+            ctx,
+            input,
+            start: 0,
+            leading_whitespace: None,
+        }
     }
 }
 
@@ -28,18 +33,21 @@ fn split(s: &str, mut f: impl FnMut(char) -> bool) -> (&str, &str) {
 
 impl<'input, 'idt> Lexer<'input, 'idt> {
     fn parse_whitespace(&mut self) -> Option<Span> {
-        if let leading_whitespace@Some(_) = self.leading_whitespace.take() {
-            return leading_whitespace
+        if let leading_whitespace @ Some(_) = self.leading_whitespace.take() {
+            return leading_whitespace;
         }
 
-        if self.input.chars().next()?.is_whitespace() || self.input.starts_with("//") || self.input.starts_with("/*") {
+        if self.input.chars().next()?.is_whitespace()
+            || self.input.starts_with("//")
+            || self.input.starts_with("/*")
+        {
             #[derive(Debug, Clone, Copy, PartialEq)]
             enum Block {
                 Normal,
                 NewStart,
                 NewEnd,
             }
-            
+
             #[derive(Debug, Clone, Copy, PartialEq)]
             enum State {
                 Whitespace,
@@ -51,29 +59,34 @@ impl<'input, 'idt> Lexer<'input, 'idt> {
 
             let mut chars = self.input.chars();
             chars.next();
-            let len = self.input.chars()
+            let len = self
+                .input
+                .chars()
                 .zip(chars)
                 .scan(&mut state, |&mut &mut ref mut state, (a, b)| match *state {
-                    State::Whitespace => 
-                    if a == '/' && b == '/' {
-                        *state = State::LineComment;
-                        Some(1)
-                    } else if a == '/' && b == '*' {
-                        *state = State::BlockComment(0, Block::NewStart);
-                        Some(1)
-                    } else if a.is_whitespace() {
-                        Some(a.len_utf8())
-                    } else {
-                        None
+                    State::Whitespace => {
+                        if a == '/' && b == '/' {
+                            *state = State::LineComment;
+                            Some(1)
+                        } else if a == '/' && b == '*' {
+                            *state = State::BlockComment(0, Block::NewStart);
+                            Some(1)
+                        } else if a.is_whitespace() {
+                            Some(a.len_utf8())
+                        } else {
+                            None
+                        }
                     }
 
-                    State::LineComment => if a == '\n' {
-                        *state = State::Whitespace;
-                        Some(1)
-                    } else {
-                        Some(a.len_utf8())
+                    State::LineComment => {
+                        if a == '\n' {
+                            *state = State::Whitespace;
+                            Some(1)
+                        } else {
+                            Some(a.len_utf8())
+                        }
                     }
-                    
+
                     State::BlockComment(depth, Block::Normal) => {
                         let block = match a {
                             '/' if b == '*' => Block::NewStart,
@@ -85,13 +98,13 @@ impl<'input, 'idt> Lexer<'input, 'idt> {
 
                         Some(a.len_utf8())
                     }
-                    
+
                     State::BlockComment(depth, Block::NewStart) => {
                         debug_assert_eq!(a, '*');
                         *state = State::BlockComment(depth + 1, Block::Normal);
                         Some(a.len_utf8())
                     }
-                    
+
                     State::BlockComment(depth, Block::NewEnd) => {
                         debug_assert_eq!(a, '/');
                         *state = if depth == 1 {
@@ -104,7 +117,7 @@ impl<'input, 'idt> Lexer<'input, 'idt> {
                     }
                 })
                 .sum();
-            
+
             self.input = &self.input[len..];
             let end = self.start + len;
 
@@ -137,14 +150,15 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
             };
 
             Some(TokenValue {
-                ty, leading_whitespace,
+                ty,
+                leading_whitespace,
                 span: Span::new(start, end),
             })
         } else if c.is_numeric() {
             let (int, input) = split(self.input, char::is_numeric);
             let init_input = self.input;
             self.input = input;
-            
+
             #[allow(clippy::never_loop)]
             while self.input.starts_with('.') {
                 const PERIOD_LEN: usize = 1;
@@ -154,7 +168,7 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
 
                 if dec.is_empty() {
                     // prevent '0.', you can't have a trailing `.`
-                    break
+                    break;
                 }
 
                 self.input = input;
@@ -167,8 +181,8 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
                 return Some(TokenValue {
                     leading_whitespace,
                     span: Span::new(start, end),
-                    ty: Type::Float(value)
-                })
+                    ty: Type::Float(value),
+                });
             }
 
             let end = self.start + int.len();
@@ -178,10 +192,12 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
             Some(TokenValue {
                 leading_whitespace,
                 span: Span::new(start, end),
-                ty: Type::Int(value)
+                ty: Type::Int(value),
             })
         } else if c == '"' {
-            let len = self.input.chars()
+            let len = self
+                .input
+                .chars()
                 .scan(true, |keep, c| {
                     if *keep {
                         *keep = false;
@@ -194,7 +210,7 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
                     }
                 })
                 .sum();
-            
+
             let (s, input) = self.input.split_at(len);
 
             if !input.starts_with('"') {
@@ -203,9 +219,9 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
 
                 self.input = "";
                 println!("ERROR: Detected an invalid quote");
-                return None
+                return None;
             }
-            
+
             self.input = &input[1..];
             let end = self.start + len + 1;
             let start = replace(&mut self.start, end);
@@ -213,7 +229,7 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
             Some(TokenValue {
                 leading_whitespace,
                 span: Span::new(start, end),
-                ty: Type::Str(&s[1..])
+                ty: Type::Str(&s[1..]),
             })
         } else {
             use Type::Symbol;
@@ -227,8 +243,8 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
                     "==" => Symbol(sym!(==)),
                     "!=" => Symbol(sym!(!=)),
                     "::" => Symbol(sym!(::)),
-                    
-                    _ => break
+
+                    _ => break,
                 };
 
                 let end = self.start + 2;
@@ -236,9 +252,13 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
                 let span = Span::new(start, end);
                 self.input = &self.input[2..];
 
-                return Some(TokenValue { ty, span, leading_whitespace })
+                return Some(TokenValue {
+                    ty,
+                    span,
+                    leading_whitespace,
+                });
             }
-            
+
             #[allow(clippy::never_loop)]
             while let Some(c) = self.input.get(0..1) {
                 let ty = match c {
@@ -270,8 +290,8 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
                     "<" => Symbol(sym!(<)),
 
                     "'" => Symbol(core_tokens::Symbol::Tick),
-                    
-                    _ => break
+
+                    _ => break,
                 };
 
                 let end = self.start + 1;
@@ -279,29 +299,34 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
                 let span = Span::new(start, end);
                 self.input = &self.input[1..];
 
-                return Some(TokenValue { ty, span, leading_whitespace })
+                return Some(TokenValue {
+                    ty,
+                    span,
+                    leading_whitespace,
+                });
             }
-            
+
             None
         }
     }
 
     fn parse_keyword(&mut self, kw: Option<Keyword>) -> Option<TokenValue<Keyword>> {
         let leading_whitespace = self.parse_whitespace()?;
-        
+
         let (ident, input) = split(self.input, |c| c == '_' || c.is_alphanumeric());
-        
+
         let ty = ident.parse().ok()?;
-        
+
         if kw.is_none() || kw == Some(ty) {
             self.input = input;
-    
+
             let end = self.start + ident.len();
             let start = replace(&mut self.start, end);
-    
+
             Some(TokenValue {
-                ty, leading_whitespace,
-                span: Span::new(start, end)
+                ty,
+                leading_whitespace,
+                span: Span::new(start, end),
             })
         } else {
             self.leading_whitespace = Some(leading_whitespace);
@@ -311,38 +336,40 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
 
     fn parse_ident(&mut self) -> Option<TokenValue<Str<'idt>>> {
         let leading_whitespace = self.parse_whitespace()?;
-        
+
         let (ident, input) = split(self.input, |c| c == '_' || c.is_alphanumeric());
-        
+
         if ident.is_empty() {
             self.leading_whitespace = Some(leading_whitespace);
             None
         } else if ident.parse::<Keyword>().is_err() {
             self.input = input;
-    
+
             let end = self.start + ident.len();
             let start = replace(&mut self.start, end);
-    
+
             Some(TokenValue {
                 ty: self.ctx.intern.insert(ident),
                 leading_whitespace,
-                span: Span::new(start, end)
+                span: Span::new(start, end),
             })
         } else {
             self.leading_whitespace = Some(leading_whitespace);
             None
         }
     }
-    
+
     fn parse_str(&mut self) -> Option<TokenValue<&'input str>> {
         let leading_whitespace = self.parse_whitespace()?;
 
         if self.input.starts_with('"') {
             self.leading_whitespace = Some(leading_whitespace);
-            return None
+            return None;
         }
-        
-        let len = self.input.chars()
+
+        let len = self
+            .input
+            .chars()
             .scan(true, |keep, c| {
                 if *keep {
                     *keep = false;
@@ -355,7 +382,7 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
                 }
             })
             .sum();
-        
+
         let (s, input) = self.input.split_at(len);
 
         if !input.starts_with('"') {
@@ -364,9 +391,9 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
 
             self.input = "";
             println!("ERROR: Detected an invalid quote");
-            return None
+            return None;
         }
-        
+
         self.input = &input[1..];
         let end = self.start + len + 1;
         let start = replace(&mut self.start, end);
@@ -374,22 +401,22 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
         Some(TokenValue {
             leading_whitespace,
             span: Span::new(start, end),
-            ty: &s[1..]
+            ty: &s[1..],
         })
     }
-    
+
     fn parse_int(&mut self) -> Option<TokenValue<u128>> {
         let leading_whitespace = self.parse_whitespace()?;
 
         let (int, input) = split(self.input, char::is_numeric);
-        
+
         if int.is_empty() {
             self.leading_whitespace = Some(leading_whitespace);
-            return None
+            return None;
         }
-        
+
         self.input = input;
-        
+
         let end = self.start + int.len();
         let start = replace(&mut self.start, end);
         let value = int.parse().unwrap();
@@ -397,20 +424,20 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
         Some(TokenValue {
             leading_whitespace,
             span: Span::new(start, end),
-            ty: value
+            ty: value,
         })
     }
-    
+
     fn parse_float(&mut self) -> Option<TokenValue<f64>> {
         let leading_whitespace = self.parse_whitespace()?;
-        
+
         let (int, input) = split(self.input, char::is_numeric);
-        
+
         if int.is_empty() {
             self.leading_whitespace = Some(leading_whitespace);
-            return None
+            return None;
         }
-        
+
         const PERIOD_LEN: usize = 1;
         assert_eq!('.'.len_utf8(), PERIOD_LEN);
 
@@ -418,9 +445,9 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
 
         if dec.is_empty() {
             self.leading_whitespace = Some(leading_whitespace);
-            return None
+            return None;
         }
-                
+
         let len = int.len() + dec.len() + PERIOD_LEN;
         let end = self.start + len;
         let start = replace(&mut self.start, end);
@@ -433,7 +460,7 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
             ty: value,
         })
     }
-    
+
     fn parse_sym(&mut self, sym: Option<Symbol>) -> Option<TokenValue<Symbol>> {
         let leading_whitespace = self.parse_whitespace()?;
 
@@ -446,8 +473,8 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
                 "==" => sym!(==),
                 "!=" => sym!(!=),
                 "::" => sym!(::),
-                
-                _ => break
+
+                _ => break,
             };
 
             if sym.is_none() || sym == Some(ty) {
@@ -456,12 +483,16 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
                 let span = Span::new(start, end);
                 self.input = &self.input[2..];
 
-                return Some(TokenValue { ty, span, leading_whitespace })
+                return Some(TokenValue {
+                    ty,
+                    span,
+                    leading_whitespace,
+                });
             } else {
-                break
+                break;
             }
         }
-        
+
         #[allow(clippy::never_loop)]
         while let Some(c) = self.input.get(0..1) {
             let ty = match c {
@@ -486,8 +517,8 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
                 "<" => sym!(<),
 
                 "'" => core_tokens::Symbol::Tick,
-                
-                _ => break
+
+                _ => break,
             };
 
             if sym.is_none() || sym == Some(ty) {
@@ -496,18 +527,25 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
                 let span = Span::new(start, end);
                 self.input = &self.input[1..];
 
-                return Some(TokenValue { ty, span, leading_whitespace })
+                return Some(TokenValue {
+                    ty,
+                    span,
+                    leading_whitespace,
+                });
             } else {
-                break
+                break;
             }
         }
 
         self.leading_whitespace = Some(leading_whitespace);
-        
+
         None
     }
-    
-    fn parse_grouping(&mut self, grouping: Option<(GroupPos, Grouping)>) -> Option<TokenValue<(GroupPos, Grouping)>> {
+
+    fn parse_grouping(
+        &mut self,
+        grouping: Option<(GroupPos, Grouping)>,
+    ) -> Option<TokenValue<(GroupPos, Grouping)>> {
         let leading_whitespace = self.parse_whitespace()?;
 
         #[allow(clippy::never_loop)]
@@ -520,23 +558,27 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
                 "{" => (GroupPos::Start, Grouping::Curly),
                 "}" => (GroupPos::End, Grouping::Curly),
 
-                _ => break
+                _ => break,
             };
 
-            if grouping.is_none() || grouping == Some(ty) {                
+            if grouping.is_none() || grouping == Some(ty) {
                 let end = self.start + 1;
                 let start = replace(&mut self.start, end);
                 let span = Span::new(start, end);
                 self.input = &self.input[1..];
 
-                return Some(TokenValue { ty, span, leading_whitespace })
+                return Some(TokenValue {
+                    ty,
+                    span,
+                    leading_whitespace,
+                });
             } else {
-                break
+                break;
             }
         }
 
         self.leading_whitespace = Some(leading_whitespace);
-        
+
         None
     }
 }

@@ -1,7 +1,7 @@
-use lib_thread_local::LazyThreadLocal;
+use core_tokens::{Lexer, Type};
 use lib_arena::local::LocalUniqueArena;
 use lib_intern::Intern;
-use core_tokens::{Lexer, Type};
+use lib_thread_local::LazyThreadLocal;
 
 fn main() {
     let file = std::env::args().nth(1).unwrap();
@@ -9,10 +9,8 @@ fn main() {
     // let arena = LocalUniqueArena::<_, 16>::new();
     let intern = Intern::new();
 
-    let context = impl_lexer::Context {
-        intern: &intern
-    };
-    
+    let context = impl_lexer::Context { intern: &intern };
+
     let mut lexer = impl_lexer::Lexer::new(&file, context);
 
     let mut kwds = 0;
@@ -33,7 +31,7 @@ fn main() {
             Type::Float(_) => floats += 1,
             Type::Str(_) => strs += 1,
             Type::Grouping(_, _) => groups += 1,
-            Type::Symbol(_) => syms += 1
+            Type::Symbol(_) => syms += 1,
         }
     }
 

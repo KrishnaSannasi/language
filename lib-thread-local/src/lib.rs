@@ -9,7 +9,7 @@ pub struct ThreadLocal<T> {
 }
 pub struct LazyThreadLocal<T, F = fn() -> T> {
     inner: ThreadLocal<T>,
-    init: F
+    init: F,
 }
 
 impl<T> Default for ThreadLocal<T> {
@@ -29,9 +29,7 @@ impl<T> ThreadLocal<T> {
         let inner = self.inner.lock();
         let value = inner.get(&current().id())?;
 
-        unsafe {
-            Some(std::mem::transmute::<&T, &T>(value))
-        }
+        unsafe { Some(std::mem::transmute::<&T, &T>(value)) }
     }
 
     pub fn get_or(&self, value: T) -> &T {
@@ -40,18 +38,19 @@ impl<T> ThreadLocal<T> {
 
     pub fn get_or_else(&self, value: impl FnOnce() -> T) -> &T {
         let mut inner = self.inner.lock();
-        let value = inner.entry(current().id()).or_insert_with(move || Box::new(value()));
+        let value = inner
+            .entry(current().id())
+            .or_insert_with(move || Box::new(value()));
 
-        unsafe {
-            std::mem::transmute::<&T, &T>(value)
-        }
+        unsafe { std::mem::transmute::<&T, &T>(value) }
     }
 }
 
 impl<T, F: Fn() -> T> LazyThreadLocal<T, F> {
     pub fn new(init: F) -> Self {
         Self {
-            init, inner: ThreadLocal::new(),
+            init,
+            inner: ThreadLocal::new(),
         }
     }
 
@@ -59,7 +58,10 @@ impl<T, F: Fn() -> T> LazyThreadLocal<T, F> {
         self.inner.get()
     }
 
-    pub fn force_init(&self) -> &T where F: Fn() -> T {
+    pub fn force_init(&self) -> &T
+    where
+        F: Fn() -> T,
+    {
         self.inner.get_or_else(&self.init)
     }
 }
