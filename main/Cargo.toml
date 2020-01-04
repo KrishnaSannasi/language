@@ -1,0 +1,18 @@
+[package]
+name = "main"
+version = "0.1.0"
+authors = ["Ozaren <krishna.sd.2012@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+core-tokens = { path = '../core-tokens' }
+
+impl-lexer = { path = '../impl-lexer' }
+
+lib-array-vec = { path = '../lib-array-vec' }
+lib-arena = { path = '../lib-arena' }
+lib-thread-local = {  path = '../lib-thread-local' }
+lib-intern = {  path = '../lib-intern' }
+crossbeam = '*'

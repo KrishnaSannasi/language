@@ -1,8 +1,12 @@
 [workspace]
 
 members = [
+    'main',
+
     'core-tokens',
-    
+
+    'impl-lexer',
+
     'lib-arena',
     'lib-thread-local',
     'lib-array-vec',
