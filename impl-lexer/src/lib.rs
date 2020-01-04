@@ -161,6 +161,38 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
                     ty: Type::Int(value)
                 })
             }
+        } else if c == '"' {
+            let len = self.input.chars()
+                .scan(true, |keep, c| {
+                    if replace(keep, false) || c != '"' {
+                        *keep = c == '\\';
+                        Some(c.len_utf8())
+                    } else {
+                        None
+                    }
+                })
+                .sum();
+            
+            let (s, input) = self.input.split_at(len);
+            
+            if !input.starts_with('"') {
+                // this should detected the end quote if it is a valid string,
+                // otherwise there was no end quote
+                
+                self.input = "";
+                println!("ERROR: Detected an invalid quote");
+                return None
+            }
+            
+            self.input = &input[1..];
+            let end = self.start + len;
+            let start = replace(&mut self.start, end);
+
+            Some(Token {
+                leading_whitespace,
+                span: Span::new(start, end),
+                ty: Type::Str(&s[1..])
+            })
         } else {
             None
         }
