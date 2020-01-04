@@ -2,6 +2,7 @@
 
 members = [
     'lib-arena',
+    'lib-thread-local',
     'lib-array-vec',
     'lib-intern',
 ]
