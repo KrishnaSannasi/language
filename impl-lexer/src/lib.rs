@@ -128,6 +128,39 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
                 span: Span::new(start, end),
                 ty: Type::Ident(ident),
             })
+        } else if c.is_numeric() {
+            let (int, input) = split(self.input, char::is_numeric);
+            let init_input = self.input;
+            self.input = input;
+            
+            if self.input.starts_with('.') {
+                const PERIOD_LEN: usize = 1;
+                assert_eq!('.'.len_utf8(), PERIOD_LEN);
+
+                let (dec, input) = split(&self.input[PERIOD_LEN..], char::is_numeric);
+                self.input = input;
+
+                let len = int.len() + dec.len() + PERIOD_LEN;
+                let end = self.start + len;
+                let start = replace(&mut self.start, end);
+                let value = init_input[..len].parse().unwrap();
+
+                Some(Token {
+                    leading_whitespace,
+                    span: Span::new(start, end),
+                    ty: Type::Float(value)
+                })
+            } else {
+                let end = self.start + int.len();
+                let start = replace(&mut self.start, end);
+                let value = int.parse().unwrap();
+
+                Some(Token {
+                    leading_whitespace,
+                    span: Span::new(start, end),
+                    ty: Type::Int(value)
+                })
+            }
         } else {
             None
         }
