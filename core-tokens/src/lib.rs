@@ -40,7 +40,7 @@ pub enum Type<'input, 'idt> {
     Int(u128),
     Float(f64),
     Symbol(Symbol),
-    Grouping(bool, Grouping),
+    Grouping(GroupPos, Grouping),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -60,7 +60,8 @@ macro_rules! sym_gen {
     ($(($($sym:tt)*) => $sym_val:ident)* --- $($pathalogical:tt)*) => {
         #[derive(Debug, Clone, Copy, PartialEq)]
         pub enum Symbol {
-            $($sym_val),*
+            $($sym_val,)*
+            Tick
         }
 
         #[macro_export]
@@ -74,16 +75,24 @@ macro_rules! sym_gen {
 }
 
 sym_gen! {
+    (=) => Assign
+
     (+) => Add
     (-) => Sub
     (*) => Mul
     (/) => Div
     (%) => Rem
 
+    (.) => Dot
     (,) => Comma
+    (:) => Colon
+    (::) => DoubleColon
+    (;) => SemiColon
+    (#) => Pound
     ($) => Dollar
+    (?) => Question
     
-    (!) => Not
+    (!) => Exclaim
     (&) => BitAnd
     (|) => BitOr
     (&&) => LogAnd
@@ -92,6 +101,13 @@ sym_gen! {
 
     (->) => SimpleArrow
     (=>) => BoldArrow
+
+    (<) => Less
+    (>) => Greater
+    (<=) => LessEqual
+    (>=) => GreaterEqual
+    (==) => Equal
+    (!=) => NotEqual
 
     ---
 

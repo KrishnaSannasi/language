@@ -1,5 +1,5 @@
 use lib_intern::Intern;
-use core_tokens::{Token, Span, Type};
+use core_tokens::{Token, Span, Type, sym};
 use std::mem::replace;
 
 #[derive(Clone, Copy)]
@@ -164,7 +164,10 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
         } else if c == '"' {
             let len = self.input.chars()
                 .scan(true, |keep, c| {
-                    if replace(keep, false) || c != '"' {
+                    if *keep {
+                        *keep = false;
+                        Some(c.len_utf8())
+                    } else if c != '"' {
                         *keep = c == '\\';
                         Some(c.len_utf8())
                     } else {
@@ -174,18 +177,18 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
                 .sum();
             
             let (s, input) = self.input.split_at(len);
-            
+
             if !input.starts_with('"') {
                 // this should detected the end quote if it is a valid string,
                 // otherwise there was no end quote
-                
+
                 self.input = "";
                 println!("ERROR: Detected an invalid quote");
                 return None
             }
             
             self.input = &input[1..];
-            let end = self.start + len;
+            let end = self.start + len + 1;
             let start = replace(&mut self.start, end);
 
             Some(Token {
@@ -194,6 +197,73 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
                 ty: Type::Str(&s[1..])
             })
         } else {
+            use core_tokens::{GroupPos, Grouping};
+            use Type::Symbol;
+
+            #[allow(clippy::never_loop)]
+            while let Some(c) = self.input.get(0..2) {
+                let ty = match c {
+                    "=>" => Symbol(sym!(=>)),
+                    "<=" => Symbol(sym!(<=)),
+                    ">=" => Symbol(sym!(>=)),
+                    "==" => Symbol(sym!(==)),
+                    "!=" => Symbol(sym!(!=)),
+                    "::" => Symbol(sym!(::)),
+                    
+                    _ => break
+                };
+
+                let end = self.start + 2;
+                let start = replace(&mut self.start, end);
+                let span = Span::new(start, end);
+                self.input = &self.input[2..];
+
+                return Some(Token { ty, span, leading_whitespace })
+            }
+            
+            #[allow(clippy::never_loop)]
+            while let Some(c) = self.input.get(0..1) {
+                let ty = match c {
+                    "(" => Type::Grouping(GroupPos::Start, Grouping::Paren),
+                    ")" => Type::Grouping(GroupPos::End, Grouping::Paren),
+                    "[" => Type::Grouping(GroupPos::Start, Grouping::Square),
+                    "]" => Type::Grouping(GroupPos::End, Grouping::Square),
+                    "{" => Type::Grouping(GroupPos::Start, Grouping::Curly),
+                    "}" => Type::Grouping(GroupPos::End, Grouping::Curly),
+
+                    "+" => Symbol(sym!(+)),
+                    "-" => Symbol(sym!(-)),
+                    "*" => Symbol(sym!(*)),
+                    "/" => Symbol(sym!(/)),
+                    "%" => Symbol(sym!(%)),
+                    "." => Symbol(sym!(.)),
+                    "," => Symbol(sym!(,)),
+                    ":" => Symbol(sym!(:)),
+                    ";" => Symbol(sym!(;)),
+                    "#" => Symbol(sym!(#)),
+                    "$" => Symbol(sym!($)),
+                    "?" => Symbol(sym!(?)),
+                    "!" => Symbol(sym!(!)),
+                    "&" => Symbol(sym!(&)),
+                    "|" => Symbol(sym!(|)),
+                    "^" => Symbol(sym!(^)),
+                    "=" => Symbol(sym!(=)),
+                    ">" => Symbol(sym!(>)),
+                    "<" => Symbol(sym!(<)),
+
+                    "'" => Symbol(core_tokens::Symbol::Tick),
+                    
+                    _ => break
+                };
+
+                let end = self.start + 1;
+                let start = replace(&mut self.start, end);
+                let span = Span::new(start, end);
+                self.input = &self.input[1..];
+
+                return Some(Token { ty, span, leading_whitespace })
+            }
+            
             None
         }
     }
