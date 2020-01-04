@@ -16,7 +16,7 @@ struct StrInner {
     data: [u8],
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Eq)]
 struct OwnStr(NonNull<()>);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -30,8 +30,8 @@ pub struct Intern {
     inner: RwLock<HashSet<OwnStr>>,
 }
 
-impl std::borrow::Borrow<str> for OwnStr {
-    fn borrow(&self) -> &str {
+impl OwnStr {
+    fn as_str(&self) -> &str {
         unsafe {
             let ptr = self.0.as_ptr();
 
@@ -44,6 +44,24 @@ impl std::borrow::Borrow<str> for OwnStr {
                 )
             )
         }
+    }
+}
+
+impl PartialEq for OwnStr {
+    fn eq(&self, _other: &OwnStr) -> bool {
+        unimplemented!()
+    }
+}
+
+impl std::hash::Hash for OwnStr {
+    fn hash<H: std::hash::Hasher>(&self, hasher: &mut H) {
+        self.as_str().hash(hasher)
+    }
+}
+
+impl std::borrow::Borrow<str> for OwnStr {
+    fn borrow(&self) -> &str {
+        self.as_str()
     }
 }
 
@@ -107,6 +125,10 @@ impl Intern {
         Self {
             inner: RwLock::new(HashSet::new()),
         }
+    }
+
+    pub fn len(&self) -> usize {
+        self.inner.read().len()
     }
 
     pub fn insert(&self, s: &(impl AsRef<str> + ?Sized)) -> Str<'_> {
