@@ -23,7 +23,7 @@ fn main() {
     let mut groups = 0;
     let mut syms = 0;
 
-    while let Some(token) = lexer.parse() {
+    while let Some(token) = lexer.parse_token() {
         println!("{:?}", token);
 
         match token.ty {

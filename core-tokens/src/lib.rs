@@ -1,7 +1,21 @@
-use lib_intern::Str;
+pub use lib_intern::Str;
 
 pub trait Lexer<'input, 'idt> {
-    fn parse(&mut self) -> Option<Token<'input, 'idt>>;
+    fn parse_token(&mut self) -> Option<Token<'input, 'idt>>;
+
+    fn parse_keyword(&mut self, kw: Option<Keyword>) -> Option<TokenValue<Keyword>>;
+
+    fn parse_ident(&mut self) -> Option<TokenValue<Str<'idt>>>;
+    
+    fn parse_str(&mut self) -> Option<TokenValue<&'input str>>;
+    
+    fn parse_int(&mut self) -> Option<TokenValue<u128>>;
+    
+    fn parse_float(&mut self) -> Option<TokenValue<f64>>;
+    
+    fn parse_sym(&mut self, sym: Option<Symbol>) -> Option<TokenValue<Symbol>>;
+    
+    fn parse_grouping(&mut self, grouping: Option<(GroupPos, Grouping)>) -> Option<TokenValue<(GroupPos, Grouping)>>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -10,9 +24,11 @@ pub struct Span {
     end: usize,
 }
 
+pub type Token<'input, 'idt> = TokenValue<Type<'input, 'idt>>;
+
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Token<'input, 'idt> {
-    pub ty: Type<'input, 'idt>,
+pub struct TokenValue<Type> {
+    pub ty: Type,
     pub leading_whitespace: Span,
     pub span: Span
 }
@@ -63,6 +79,29 @@ macro_rules! sym_gen {
         pub enum Symbol {
             $($sym_val,)*
             Tick
+        }
+
+        #[derive(Debug)]
+        pub struct InvalidSymbol;
+
+        impl std::str::FromStr for Symbol {
+            type Err = InvalidSymbol;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                match s {
+                    $(stringify!($($sym)*) => Ok($crate::Symbol::$sym_val),)*
+                    _ => Err(InvalidSymbol),
+                }
+            }
+        }
+
+        impl Symbol {
+            fn to_str(self) -> &'static str {
+                match self {
+                    $(Symbol::$sym_val => stringify!($($sym)*),)*
+                    Symbol::Tick => "'"
+                }
+            }
         }
 
         #[macro_export]
