@@ -35,6 +35,7 @@ impl Span {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Type<'input, 'idt> {
+    Keyword(Keyword),
     Ident(Str<'idt>),
     Str(&'input str),
     Int(u128),
@@ -43,13 +44,13 @@ pub enum Type<'input, 'idt> {
     Grouping(GroupPos, Grouping),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GroupPos {
     Start,
     End
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Grouping {
     Paren,
     Square,
@@ -58,7 +59,7 @@ pub enum Grouping {
 
 macro_rules! sym_gen {
     ($(($($sym:tt)*) => $sym_val:ident)* --- $($pathalogical:tt)*) => {
-        #[derive(Debug, Clone, Copy, PartialEq)]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
         pub enum Symbol {
             $($sym_val,)*
             Tick
@@ -68,6 +69,37 @@ macro_rules! sym_gen {
         macro_rules! sym {
         $(
             ($($sym)*) => { $crate::Symbol::$sym_val };
+        )*
+        $($pathalogical)*
+        }
+    }
+}
+
+macro_rules! kw_gen {
+    ($($kw:ident => $kw_val:ident)* --- $($pathalogical:tt)*) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+        pub enum Keyword {
+            $($kw_val),*
+        }
+
+        #[derive(Debug)]
+        pub struct InvalidKeyword;
+
+        impl std::str::FromStr for Keyword {
+            type Err = InvalidKeyword;
+
+            fn from_str(s: &str) -> Result<Self, Self::Err> {
+                match s {
+                    $(stringify!($kw) => Ok($crate::Keyword::$kw_val),)*
+                    _ => Err(InvalidKeyword),
+                }
+            }
+        }
+
+        #[macro_export]
+        macro_rules! kw {
+        $(
+            ($kw) => { $crate::Keyword::$kw_val };
         )*
         $($pathalogical)*
         }
@@ -112,4 +144,34 @@ sym_gen! {
     ---
 
     ($($tokens:tt)*) => { compile_error!(concat!("no known symbol: \"", stringify!($($tokens)*), "\"")) }
+}
+
+kw_gen! {
+    let => Let
+    mut => Mut
+
+    match => Match
+    loop => Loop
+    
+    break => Break
+    continue => Continue
+    return => Return
+    
+    if => If
+    else => Else
+    while => While
+    
+    static => Static
+    comp => Comp
+    
+    struct => Struct
+    enum => Enum
+    union => Union
+    trait => Trait
+
+    pub => Pub
+    mod => Mod
+    ---
+
+    ($($tokens:tt)*) => { compile_error!(concat!("no known keyword: \"", stringify!($($tokens)*), "\"")) }
 }

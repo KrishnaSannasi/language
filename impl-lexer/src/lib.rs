@@ -121,12 +121,15 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
             let end = self.start + ident.len();
             let start = replace(&mut self.start, end);
 
-            let ident = self.ctx.intern.insert(ident);
+            let ty = if let Ok(keyword) = ident.parse() {
+                Type::Keyword(keyword)
+            } else {
+                Type::Ident(self.ctx.intern.insert(ident))
+            };
 
             Some(Token {
-                leading_whitespace,
+                ty, leading_whitespace,
                 span: Span::new(start, end),
-                ty: Type::Ident(ident),
             })
         } else if c.is_numeric() {
             let (int, input) = split(self.input, char::is_numeric);

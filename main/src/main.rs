@@ -15,6 +15,7 @@ fn main() {
     
     let mut lexer = impl_lexer::Lexer::new(&file, context);
 
+    let mut kwds = 0;
     let mut idents = 0;
     let mut ints = 0;
     let mut floats = 0;
@@ -26,6 +27,7 @@ fn main() {
         println!("{:?}", token);
 
         match token.ty {
+            Type::Keyword(_) => kwds += 1,
             Type::Ident(_) => idents += 1,
             Type::Int(_) => ints += 1,
             Type::Float(_) => floats += 1,
@@ -35,6 +37,7 @@ fn main() {
         }
     }
 
+    dbg!(kwds);
     dbg!(idents);
     dbg!(ints);
     dbg!(floats);
