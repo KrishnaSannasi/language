@@ -1,6 +1,8 @@
 [workspace]
 
-members = []
+members = [
+    'lib-intern',
+]
 
 [profile.dev]
 opt-level = 1
