@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    'lib-arena',
     'lib-array-vec',
     'lib-intern',
 ]
