@@ -6,6 +6,7 @@ use std::marker::PhantomData;
 use std::ptr::NonNull;
 
 use parking_lot::RwLock;
+use std::cell::UnsafeCell;
 
 const USIZE_SIZE: usize = std::mem::size_of::<usize>();
 const USIZE_ALIGN: usize = std::mem::align_of::<usize>();
@@ -28,6 +29,11 @@ pub struct Str<'a> {
 #[derive(Default)]
 pub struct Intern {
     inner: RwLock<HashSet<OwnStr>>,
+}
+
+#[derive(Default)]
+pub struct Store {
+    inner: UnsafeCell<Vec<OwnStr>>,
 }
 
 impl OwnStr {
@@ -116,6 +122,56 @@ impl std::ops::Deref for Str<'_> {
     }
 }
 
+impl From<&str> for OwnStr {
+    fn from(s: &str) -> OwnStr {
+        unsafe {
+            let layout = Layout::from_size_align_unchecked(s.len() + USIZE_SIZE, USIZE_ALIGN);
+            let ptr = alloc(layout);
+
+            let str_repr = match NonNull::new(ptr as *mut ()) {
+                Some(ptr) => ptr,
+                None => handle_alloc_error(layout),
+            };
+
+            ptr.cast::<usize>().write(s.len());
+
+            ptr.add(USIZE_SIZE).copy_from(s.as_ptr(), s.len());
+
+            OwnStr(str_repr)
+        }
+    }
+}
+
+impl Store {
+    pub const fn new() -> Self {
+        Self {
+            inner: UnsafeCell::new(Vec::new()),
+        }
+    }
+
+    pub fn insert(&self, s: &(impl AsRef<str> + ?Sized)) -> Str<'_> {
+        self.insert_inner(s.as_ref())
+    }
+
+    fn insert_inner(&self, s: &str) -> Str<'_> {
+        let inner = unsafe {
+            &mut *self.inner.get()
+        };
+
+        let own_str = OwnStr::from(s);
+
+        let ret = Str {
+            ptr: own_str.0,
+            mark: PhantomData,
+        };
+
+        inner.push(own_str);
+
+        ret
+    }
+}
+
+#[allow(clippy::len_without_is_empty)]
 impl Intern {
     pub fn new() -> Self {
         Self {
@@ -148,21 +204,7 @@ impl Intern {
     fn insert_slow(&self, s: &str) -> Str<'_> {
         let mut inner = self.inner.write();
 
-        let own_str = inner.get_or_insert_with(s, |s: &str| unsafe {
-            let layout = Layout::from_size_align_unchecked(s.len() + USIZE_SIZE, USIZE_ALIGN);
-            let ptr = alloc(layout);
-
-            let str_repr = match NonNull::new(ptr as *mut ()) {
-                Some(ptr) => ptr,
-                None => handle_alloc_error(layout),
-            };
-
-            ptr.cast::<usize>().write(s.len());
-
-            ptr.add(USIZE_SIZE).copy_from(s.as_ptr(), s.len());
-
-            OwnStr(str_repr)
-        });
+        let own_str = inner.get_or_insert_with(s, |s: &str| s.into());
 
         Str {
             ptr: own_str.0,
