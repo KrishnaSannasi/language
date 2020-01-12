@@ -4,8 +4,10 @@ members = [
     'main',
 
     'core-tokens',
+    'core-hir',
 
     'impl-lexer',
+    'impl-pass-hir',
 
     'lib-arena',
     'lib-thread-local',

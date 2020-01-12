@@ -1,21 +1,24 @@
 use core_tokens::*;
-use lib_intern::Intern;
+use lib_intern::{Intern, Store};
 use std::mem::replace;
 
 #[derive(Clone, Copy)]
-pub struct Context<'idt> {
+pub struct Context<'str, 'idt> {
     pub intern: &'idt Intern,
+    pub small_strings: &'str Intern,
+    pub long_strings: &'str Store,
+    pub max_small_string_size: usize,
 }
 
-pub struct Lexer<'input, 'idt> {
-    ctx: Context<'idt>,
+pub struct Lexer<'input, 'str, 'idt> {
+    ctx: Context<'str, 'idt>,
     input: &'input str,
     start: usize,
     leading_whitespace: Option<Span>,
 }
 
-impl<'input, 'idt> Lexer<'input, 'idt> {
-    pub const fn new(input: &'input str, ctx: Context<'idt>) -> Self {
+impl<'input, 'str, 'idt> Lexer<'input, 'str, 'idt> {
+    pub const fn new(input: &'input str, ctx: Context<'str, 'idt>) -> Self {
         Self {
             ctx,
             input,
@@ -31,7 +34,15 @@ fn split(s: &str, mut f: impl FnMut(char) -> bool) -> (&str, &str) {
     s.split_at(len)
 }
 
-impl<'input, 'idt> Lexer<'input, 'idt> {
+impl<'input, 'str, 'idt> Lexer<'input, 'str, 'idt> {
+    fn alloc_str(&self, s: &str) -> Str<'str> {
+        if s.len() < self.ctx.max_small_string_size {
+            self.ctx.small_strings.insert(s)
+        } else {
+            self.ctx.long_strings.insert(s)
+        }
+    }
+    
     fn parse_whitespace(&mut self) -> Option<Span> {
         if let leading_whitespace @ Some(_) = self.leading_whitespace.take() {
             return leading_whitespace;
@@ -130,8 +141,8 @@ impl<'input, 'idt> Lexer<'input, 'idt> {
     }
 }
 
-impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
-    fn parse_token(&mut self) -> Option<Token<'input, 'idt>> {
+impl<'input, 'str, 'idt> core_tokens::Lexer<'str, 'idt> for Lexer<'input, 'str, 'idt> {
+    fn parse_token(&mut self) -> Option<Token<'str, 'idt>> {
         let leading_whitespace = self.parse_whitespace()?;
 
         let c = self.input.chars().next()?;
@@ -229,7 +240,7 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
             Some(TokenValue {
                 leading_whitespace,
                 span: Span::new(start, end),
-                ty: Type::Str(&s[1..]),
+                ty: Type::Str(self.alloc_str(&s[1..])),
             })
         } else {
             use Type::Symbol;
@@ -359,7 +370,7 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
         }
     }
 
-    fn parse_str(&mut self) -> Option<TokenValue<&'input str>> {
+    fn parse_str(&mut self) -> Option<TokenValue<Str<'str>>> {
         let leading_whitespace = self.parse_whitespace()?;
 
         if self.input.starts_with('"') {
@@ -401,7 +412,7 @@ impl<'input, 'idt> core_tokens::Lexer<'input, 'idt> for Lexer<'input, 'idt> {
         Some(TokenValue {
             leading_whitespace,
             span: Span::new(start, end),
-            ty: &s[1..],
+            ty: self.alloc_str(&s[1..]),
         })
     }
 

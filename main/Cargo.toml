@@ -10,6 +10,7 @@ edition = "2018"
 core-tokens = { path = '../core-tokens' }
 
 impl-lexer = { path = '../impl-lexer' }
+impl-pass-hir = {  path = '../impl-pass-hir' }
 
 lib-array-vec = { path = '../lib-array-vec' }
 lib-arena = { path = '../lib-arena' }

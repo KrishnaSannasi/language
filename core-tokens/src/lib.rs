@@ -1,13 +1,13 @@
 pub use lib_intern::Str;
 
-pub trait Lexer<'input, 'idt> {
-    fn parse_token(&mut self) -> Option<Token<'input, 'idt>>;
+pub trait Lexer<'str, 'idt> {
+    fn parse_token(&mut self) -> Option<Token<'str, 'idt>>;
 
     fn parse_keyword(&mut self, kw: Option<Keyword>) -> Option<TokenValue<Keyword>>;
 
     fn parse_ident(&mut self) -> Option<TokenValue<Str<'idt>>>;
 
-    fn parse_str(&mut self) -> Option<TokenValue<&'input str>>;
+    fn parse_str(&mut self) -> Option<TokenValue<Str<'str>>>;
 
     fn parse_int(&mut self) -> Option<TokenValue<u128>>;
 
@@ -27,7 +27,7 @@ pub struct Span {
     end: usize,
 }
 
-pub type Token<'input, 'idt> = TokenValue<Type<'input, 'idt>>;
+pub type Token<'str, 'idt> = TokenValue<Type<'str, 'idt>>;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct TokenValue<Type> {
@@ -53,10 +53,10 @@ impl Span {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Type<'input, 'idt> {
+pub enum Type<'str, 'idt> {
     Keyword(Keyword),
     Ident(Str<'idt>),
-    Str(&'input str),
+    Str(Str<'str>),
     Int(u128),
     Float(f64),
     Symbol(Symbol),
@@ -99,7 +99,7 @@ macro_rules! sym_gen {
         }
 
         impl Symbol {
-            fn to_str(self) -> &'static str {
+            pub fn to_str(self) -> &'static str {
                 match self {
                     $(Symbol::$sym_val => stringify!($($sym)*),)*
                     Symbol::Tick => "'"
