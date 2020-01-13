@@ -67,8 +67,16 @@ pub enum Type<'str, 'idt> {
     Grouping(GroupPos, Grouping),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Ident<'idt>(InternStr<'idt>);
+
+use std::fmt;
+
+impl fmt::Debug for Ident<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Ident({})", self.0.as_str())
+    }
+}
 
 impl<'idt> Ident<'idt> {
     pub const fn new(s: InternStr<'idt>) -> Self {
