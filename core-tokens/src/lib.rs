@@ -50,6 +50,10 @@ impl Span {
     pub const fn end(&self) -> usize {
         self.end
     }
+
+    pub fn to(self, other: Self) -> Self {
+        Self::new(self.start, other.end)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -222,6 +226,9 @@ kw_gen! {
 
     pub => Pub
     mod => Mod
+
+    print => Print
+
     ---
 
     ($($tokens:tt)*) => { compile_error!(concat!("no known keyword: \"", stringify!($($tokens)*), "\"")) }

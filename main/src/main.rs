@@ -24,7 +24,7 @@ fn main() {
     let context = impl_pass_hir::Context { arena: &arena };
     let mut hir_parser = impl_pass_hir::HirParser::new(lexer, context);
     
-    while let Some(hir_let) = hir_parser.parse_let() {
+    while let Some(hir_let) = hir_parser.parse() {
         dbg!(hir_let);
     }
 }

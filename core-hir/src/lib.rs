@@ -10,9 +10,9 @@ pub struct HirNode<'str, 'idt, 'hir> {
 pub enum Hir<'str, 'idt, 'hir> {
     Let {
         pat: Pattern<'str, 'idt>,
-        ty: Option<Expr<'str, 'idt>>,
         value: Expr<'str, 'idt>,
     },
+    Print(Ident<'idt>),
     Rec(&'hir mut Hir<'str, 'idt, 'hir>),
 }
 

@@ -10,3 +10,4 @@ edition = "2018"
 core-hir = { path = '../core-hir' }
 core-tokens = { path = '../core-tokens' }
 lib-arena = { path = '../lib-arena' }
+lib-peek = { path = '../lib-peek', features = ['core-tokens'] }
