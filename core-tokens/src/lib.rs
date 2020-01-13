@@ -1,11 +1,11 @@
-pub use lib_intern::Str;
+pub use lib_intern::{Str, InternStr};
 
 pub trait Lexer<'str, 'idt> {
     fn parse_token(&mut self) -> Option<Token<'str, 'idt>>;
 
     fn parse_keyword(&mut self, kw: Option<Keyword>) -> Option<TokenValue<Keyword>>;
 
-    fn parse_ident(&mut self) -> Option<TokenValue<Str<'idt>>>;
+    fn parse_ident(&mut self) -> Option<TokenValue<Ident<'idt>>>;
 
     fn parse_str(&mut self) -> Option<TokenValue<Str<'str>>>;
 
@@ -55,12 +55,21 @@ impl Span {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Type<'str, 'idt> {
     Keyword(Keyword),
-    Ident(Str<'idt>),
+    Ident(Ident<'idt>),
     Str(Str<'str>),
     Int(u128),
     Float(f64),
     Symbol(Symbol),
     Grouping(GroupPos, Grouping),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Ident<'idt>(InternStr<'idt>);
+
+impl<'idt> Ident<'idt> {
+    pub const fn new(s: InternStr<'idt>) -> Self {
+        Self(s)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

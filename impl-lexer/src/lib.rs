@@ -1,11 +1,11 @@
 use core_tokens::*;
-use lib_intern::{Intern, Store};
+use lib_intern::{Interner, Store};
 use std::mem::replace;
 
 #[derive(Clone, Copy)]
 pub struct Context<'str, 'idt> {
-    pub intern: &'idt Intern,
-    pub small_strings: &'str Intern,
+    pub intern: &'idt Interner,
+    pub small_strings: &'str Interner,
     pub long_strings: &'str Store,
     pub max_small_string_size: usize,
 }
@@ -37,9 +37,9 @@ fn split(s: &str, mut f: impl FnMut(char) -> bool) -> (&str, &str) {
 impl<'input, 'str, 'idt> Lexer<'input, 'str, 'idt> {
     fn alloc_str(&self, s: &str) -> Str<'str> {
         if s.len() < self.ctx.max_small_string_size {
-            self.ctx.small_strings.insert(s)
+            self.ctx.small_strings.insert(s).into()
         } else {
-            self.ctx.long_strings.insert(s)
+            self.ctx.long_strings.insert(s).into()
         }
     }
     
@@ -157,7 +157,7 @@ impl<'input, 'str, 'idt> core_tokens::Lexer<'str, 'idt> for Lexer<'input, 'str, 
             let ty = if let Ok(keyword) = ident.parse() {
                 Type::Keyword(keyword)
             } else {
-                Type::Ident(self.ctx.intern.insert(ident))
+                Type::Ident(Ident::new(self.ctx.intern.insert(ident)))
             };
 
             Some(TokenValue {
@@ -345,7 +345,7 @@ impl<'input, 'str, 'idt> core_tokens::Lexer<'str, 'idt> for Lexer<'input, 'str, 
         }
     }
 
-    fn parse_ident(&mut self) -> Option<TokenValue<Str<'idt>>> {
+    fn parse_ident(&mut self) -> Option<TokenValue<Ident<'idt>>> {
         let leading_whitespace = self.parse_whitespace()?;
 
         let (ident, input) = split(self.input, |c| c == '_' || c.is_alphanumeric());
@@ -360,7 +360,7 @@ impl<'input, 'str, 'idt> core_tokens::Lexer<'str, 'idt> for Lexer<'input, 'str, 
             let start = replace(&mut self.start, end);
 
             Some(TokenValue {
-                ty: self.ctx.intern.insert(ident),
+                ty: Ident::new(self.ctx.intern.insert(ident)),
                 leading_whitespace,
                 span: Span::new(start, end),
             })

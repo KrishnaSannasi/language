@@ -1,4 +1,4 @@
-use core_tokens::{Span, Str};
+use core_tokens::{Span, Str, Ident};
 
 #[derive(Debug, PartialEq)]
 pub struct HirNode<'str, 'idt, 'hir> {
@@ -25,20 +25,20 @@ pub enum BindingMode {
 #[derive(Debug, PartialEq)]
 pub enum Pattern<'str, 'idt> {
     Literal(Literal<'str>),
-    Ident(Str<'idt>, BindingMode),
+    Ident(Ident<'idt>, BindingMode),
     Tuple(Vec<Pattern<'str, 'idt>>),
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Expr<'str, 'idt> {
     Literal(Literal<'str>),
-    Ident(Str<'idt>),
+    Ident(Ident<'idt>),
     Tuple(Vec<Pattern<'str, 'idt>>),
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Literal<'str> {
-    Str(&'str str),
+    Str(Str<'str>),
     Int(u128),
     Float(f64),
 }

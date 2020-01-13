@@ -1,14 +1,14 @@
 use core_tokens::{Lexer, Type};
 use lib_arena::local::LocalUniqueArena;
-use lib_intern::{Intern, Store};
+use lib_intern::{Interner, Store};
 use lib_thread_local::LazyThreadLocal;
 
 fn main() {
     let file = std::env::args().nth(1).unwrap();
     let file = std::fs::read_to_string(file).unwrap();
     
-    let intern = Intern::new();
-    let small_strings = Intern::new();
+    let intern = Interner::new();
+    let small_strings = Interner::new();
     let long_strings = Store::new();
 
     let context = impl_lexer::Context {

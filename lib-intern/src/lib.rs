@@ -11,6 +11,8 @@ use std::cell::UnsafeCell;
 const USIZE_SIZE: usize = std::mem::size_of::<usize>();
 const USIZE_ALIGN: usize = std::mem::align_of::<usize>();
 
+const _: () = [()][!(USIZE_SIZE > 1) as usize];
+
 #[repr(C)]
 struct StrInner {
     len: usize,
@@ -20,14 +22,87 @@ struct StrInner {
 #[derive(Eq)]
 struct OwnStr(NonNull<()>);
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Str<'a> {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Intern;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Data;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Dynamic;
+
+pub type InternStr<'a> = Str<'a, Intern>;
+pub type DataStr<'a> = Str<'a, Data>;
+
+#[derive(Clone, Copy)]
+pub struct Str<'a, T: = Dynamic> {
     ptr: NonNull<()>,
-    mark: PhantomData<&'a StrInner>,
+    mark: PhantomData<(&'a StrInner, T)>,
+}
+
+impl<T> Eq for Str<'_, T> where Self: PartialEq {}
+
+impl PartialEq<Str<'_, Intern>> for Str<'_, Intern> {
+    fn eq(&self, other: &Str<'_, Intern>) -> bool {
+        self.ptr == other.ptr
+    }
+}
+
+impl PartialEq<Str<'_, Data>> for Str<'_, Data> {
+    fn eq(&self, other: &Str<'_, Data>) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl PartialEq<Str<'_, Dynamic>> for Str<'_, Dynamic> {
+    fn eq(&self, other: &Str<'_, Dynamic>) -> bool {
+        if self.ptr == other.ptr {
+            return true
+        }
+        
+        let s_ptr = self.ptr.as_ptr() as usize;
+        let o_ptr = other.ptr.as_ptr() as usize;
+
+        match ((s_ptr & 1) == 0, (o_ptr & 1) == 0) {
+            (true, true) => {
+                let s = DataStr { ptr: self.ptr, mark: PhantomData };
+                let o = DataStr { ptr: other.ptr, mark: PhantomData };
+
+                s == o
+            }
+            | (false, false)
+            | (false, true)
+            | (true, false) => false
+        }
+    }
+}
+
+use std::hash::{Hash, Hasher};
+
+impl Hash for Str<'_, Intern> {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        self.ptr.hash(hasher)
+    }
+}
+
+impl Hash for Str<'_, Data> {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        self.as_str().hash(hasher)
+    }
+}
+
+impl Hash for Str<'_, Dynamic> {
+    fn hash<H: Hasher>(&self, hasher: &mut H) {
+        let s_ptr = self.ptr.as_ptr() as usize;
+
+        if (s_ptr & 1) == 0 {
+            DataStr { ptr: self.ptr, mark: PhantomData }.hash(hasher)
+        } else {
+            self.ptr.hash(hasher)
+        }
+    }
 }
 
 #[derive(Default)]
-pub struct Intern {
+pub struct Interner {
     inner: RwLock<HashSet<OwnStr>>,
 }
 
@@ -69,43 +144,60 @@ impl std::borrow::Borrow<str> for OwnStr {
     }
 }
 
-impl Str<'_> {
+impl<'a> From<Str<'a, Data>> for Str<'a, Dynamic> {
+    fn from(s: Str<'a, Data>) -> Self {
+        Self { ptr: s.ptr, mark: PhantomData }
+    }
+}
+
+impl<'a> From<Str<'a, Intern>> for Str<'a, Dynamic> {
+    fn from(s: Str<'a, Intern>) -> Self {
+        let ptr = s.ptr.as_ptr() as usize;
+        let ptr = ptr | 1;
+        let ptr = unsafe {
+            NonNull::new_unchecked(ptr as *mut ())
+        };
+        Self { ptr, mark: PhantomData }
+    }
+}
+
+impl<T> Str<'_, T> {
     pub fn as_str(&self) -> &str {
         self
     }
 }
 
-impl AsRef<str> for Str<'_> {
+impl<T> AsRef<str> for Str<'_, T> {
     fn as_ref(&self) -> &str {
         self
     }
 }
 
-impl<'a: 'b, 'b> AsRef<Str<'b>> for Str<'a> {
-    fn as_ref(&self) -> &Str<'b> {
+impl<'a: 'b, 'b, T> AsRef<Str<'b, T>> for Str<'a, T> {
+    fn as_ref(&self) -> &Str<'b, T> {
         self
     }
 }
 
-impl std::borrow::Borrow<str> for Str<'_> {
+impl<T> std::borrow::Borrow<str> for Str<'_, T> {
     fn borrow(&self) -> &str {
         self
     }
 }
 
-impl std::fmt::Debug for Str<'_> {
+impl<T> std::fmt::Debug for Str<'_, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         std::fmt::Debug::fmt(self.as_str(), f)
     }
 }
 
-impl std::fmt::Display for Str<'_> {
+impl<T> std::fmt::Display for Str<'_, T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         std::fmt::Display::fmt(self.as_str(), f)
     }
 }
 
-impl std::ops::Deref for Str<'_> {
+impl<T> std::ops::Deref for Str<'_, T> {
     type Target = str;
 
     fn deref(&self) -> &str {
@@ -149,18 +241,18 @@ impl Store {
         }
     }
 
-    pub fn insert(&self, s: &(impl AsRef<str> + ?Sized)) -> Str<'_> {
+    pub fn insert(&self, s: &(impl AsRef<str> + ?Sized)) -> DataStr<'_> {
         self.insert_inner(s.as_ref())
     }
 
-    fn insert_inner(&self, s: &str) -> Str<'_> {
+    fn insert_inner(&self, s: &str) -> DataStr<'_> {
         let inner = unsafe {
             &mut *self.inner.get()
         };
 
         let own_str = OwnStr::from(s);
 
-        let ret = Str {
+        let ret = DataStr {
             ptr: own_str.0,
             mark: PhantomData,
         };
@@ -172,7 +264,7 @@ impl Store {
 }
 
 #[allow(clippy::len_without_is_empty)]
-impl Intern {
+impl Interner {
     pub fn new() -> Self {
         Self {
             inner: RwLock::new(HashSet::new()),
@@ -183,14 +275,14 @@ impl Intern {
         self.inner.read().len()
     }
 
-    pub fn insert(&self, s: &(impl AsRef<str> + ?Sized)) -> Str<'_> {
+    pub fn insert(&self, s: &(impl AsRef<str> + ?Sized)) -> InternStr<'_> {
         self.insert_inner(s.as_ref())
     }
 
-    fn insert_inner(&self, s: &str) -> Str<'_> {
+    fn insert_inner(&self, s: &str) -> InternStr<'_> {
         let inner = self.inner.read();
         if let Some(own_str) = inner.get(s) {
-            Str {
+            InternStr {
                 ptr: own_str.0,
                 mark: PhantomData,
             }
@@ -201,12 +293,12 @@ impl Intern {
     }
 
     #[cold]
-    fn insert_slow(&self, s: &str) -> Str<'_> {
+    fn insert_slow(&self, s: &str) -> InternStr<'_> {
         let mut inner = self.inner.write();
 
         let own_str = inner.get_or_insert_with(s, |s: &str| s.into());
 
-        Str {
+        InternStr {
             ptr: own_str.0,
             mark: PhantomData,
         }
