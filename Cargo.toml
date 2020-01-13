@@ -13,6 +13,7 @@ members = [
     'lib-thread-local',
     'lib-array-vec',
     'lib-intern',
+    'lib-peek',
 ]
 
 [profile.dev]
