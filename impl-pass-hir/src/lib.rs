@@ -1,7 +1,7 @@
 use lib_arena::local::LocalUniqueArena;
 use lib_peek::PeekableLexer;
 
-use core_hir::{Hir, HirNode, Pattern, Expr, BindingMode, Literal};
+use core_hir::{Hir, HirNode, Pattern, Expr, SimpleExpr, BindingMode, Literal};
 use core_tokens::{Span, Lexer, kw, sym};
 
 #[derive(Clone, Copy)]
@@ -14,13 +14,20 @@ pub struct HirParser<'str, 'idt, 'hir, L> {
     lexer: PeekableLexer<'str, 'idt, L, 1>,
 }
 
-type Node<N> = <N as HasNode>::Node;
+type TNode<N> = <N as HasNode>::Node;
+type TExpr<N> = <N as HasNode>::Expr;
+type TSimpleExpr<N> = <N as HasNode>::SimpleExpr;
+
 pub trait HasNode {
     type Node;
+    type Expr;
+    type SimpleExpr;
 }
 
 impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HasNode for HirParser<'str, 'idt, 'hir, L> {
     type Node = HirNode<'str, 'idt, 'hir>;
+    type Expr = Expr<'str, 'idt>;
+    type SimpleExpr = SimpleExpr<'str, 'idt>;
 }
 
 impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
@@ -32,7 +39,7 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
         self.context.arena.alloc(node)
     }
 
-    pub fn parse(&mut self) -> Option<Node<Self>> {
+    pub fn parse(&mut self) -> Option<TNode<Self>> {
         use core_tokens::Type;
 
         let token = self.lexer.peek_token(1).next()?;
@@ -44,7 +51,7 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
         }
     }
 
-    pub fn parse_print(&mut self) -> Option<Node<Self>> {
+    pub fn parse_print(&mut self) -> Option<TNode<Self>> {
         let start = self.lexer.parse_keyword(Some(kw!(print)))?;
         let ident = self.lexer.parse_ident()?;
         let end = self.lexer.parse_sym(Some(sym!(;)))?;
@@ -55,19 +62,74 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
         })
     }
 
-    pub fn parse_let(&mut self) -> Option<Node<Self>> {
+    pub fn parse_let(&mut self) -> Option<TNode<Self>> {
         let start = self.lexer.parse_keyword(Some(kw!(let)))?;
         let ident = self.lexer.parse_ident()?;
         self.lexer.parse_sym(Some(sym!(=)))?;
-        let value = self.lexer.parse_int()?;
+        let value = self.parse_expr()?;
         let end = self.lexer.parse_sym(Some(sym!(;)))?;
 
         Some(HirNode {
             span: start.span.to(end.span),
             ty: Hir::Let {
                 pat: Pattern::Ident(ident.ty, BindingMode::Value),
-                value: Expr::Literal(Literal::Int(value.ty)),
+                value,
             }
         })
+    }
+
+    pub fn parse_expr(&mut self) -> Option<TExpr<Self>> {
+        use core_tokens::Type;
+
+        let expr = self.parse_simple_expr()?;
+
+        let peek = self.lexer.peek_token(1).next();
+
+        #[allow(clippy::never_loop)]
+        'simple: loop {
+            if let Some(peek) = peek {
+                if let Type::Symbol(sym) = peek.ty {
+                    match sym {
+                        | sym!(+)
+                        | sym!(-)
+                        | sym!(*)
+                        | sym!(/) => (),
+                        _ => break 'simple
+                    }
+
+                    self.lexer.parse_token();
+
+                    let next = self.parse_simple_expr()?;
+
+                    return Some(Expr::BinOp(
+                        core_hir::Operator::Symbol(sym),
+                        expr,
+                        next,
+                    ))
+                }
+            }
+
+            break
+        }
+
+        Some(Expr::Simple(expr))
+    }
+
+    pub fn parse_simple_expr(&mut self) -> Option<TSimpleExpr<Self>> {
+        use core_tokens::Type;
+
+        let expr = self.lexer.peek_token(1).next()?;
+
+        let token = match expr.ty {
+            Type::Ident(ident) => SimpleExpr::Ident(ident),
+            Type::Str(s) => SimpleExpr::Literal(Literal::Str(s)),
+            Type::Int(x) => SimpleExpr::Literal(Literal::Int(x)),
+            Type::Float(x) => SimpleExpr::Literal(Literal::Float(x)),
+            _ => return None
+        };
+
+        self.lexer.parse_token();
+
+        Some(token)
     }
 }

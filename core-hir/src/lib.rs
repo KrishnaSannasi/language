@@ -31,6 +31,20 @@ pub enum Pattern<'str, 'idt> {
 
 #[derive(Debug, PartialEq)]
 pub enum Expr<'str, 'idt> {
+    Simple(SimpleExpr<'str, 'idt>),
+    PreOp(Operator, SimpleExpr<'str, 'idt>),
+    PostOp(Operator, SimpleExpr<'str, 'idt>),
+    BinOp(Operator, SimpleExpr<'str, 'idt>, SimpleExpr<'str, 'idt>),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Operator {
+    Symbol(core_tokens::Symbol),
+    Keyword(core_tokens::Keyword),
+}
+
+#[derive(Debug, PartialEq)]
+pub enum SimpleExpr<'str, 'idt> {
     Literal(Literal<'str>),
     Ident(Ident<'idt>),
     Tuple(Vec<Pattern<'str, 'idt>>),
