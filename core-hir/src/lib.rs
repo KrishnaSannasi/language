@@ -1,19 +1,21 @@
 use core_tokens::{Span, Str, Ident};
 
 #[derive(Debug, PartialEq)]
-pub struct HirNode<'str, 'idt, 'hir> {
-    pub ty: Hir<'str, 'idt, 'hir>,
+pub struct Node<N> {
+    pub val: N,
     pub span: Span,
 }
+
+pub type HirNode<'str, 'idt, 'hir> = Node<Hir<'str, 'idt, 'hir>>;
 
 #[derive(Debug, PartialEq)]
 pub enum Hir<'str, 'idt, 'hir> {
     Let {
-        pat: Pattern<'str, 'idt>,
-        value: Expr<'str, 'idt>,
+        pat: Node<Pattern<'str, 'idt>>,
+        value: Node<Expr<'str, 'idt>>,
     },
     Print(Ident<'idt>),
-    Scope(Vec<HirNode<'str, 'idt, 'hir>>),
+    Scope(Vec<Node<Hir<'str, 'idt, 'hir>>>),
     Rec(std::convert::Infallible, &'hir mut Hir<'str, 'idt, 'hir>),
 }
 
@@ -32,10 +34,10 @@ pub enum Pattern<'str, 'idt> {
 
 #[derive(Debug, PartialEq)]
 pub enum Expr<'str, 'idt> {
-    Simple(SimpleExpr<'str, 'idt>),
-    PreOp(Operator, SimpleExpr<'str, 'idt>),
-    PostOp(Operator, SimpleExpr<'str, 'idt>),
-    BinOp(Operator, SimpleExpr<'str, 'idt>, SimpleExpr<'str, 'idt>),
+    Simple(Node<SimpleExpr<'str, 'idt>>),
+    PreOp(Operator, Node<SimpleExpr<'str, 'idt>>),
+    PostOp(Operator, Node<SimpleExpr<'str, 'idt>>),
+    BinOp(Operator, Node<SimpleExpr<'str, 'idt>>, Node<SimpleExpr<'str, 'idt>>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -48,7 +50,7 @@ pub enum Operator {
 pub enum SimpleExpr<'str, 'idt> {
     Literal(Literal<'str>),
     Ident(Ident<'idt>),
-    Tuple(Vec<Pattern<'str, 'idt>>),
+    Tuple(Vec<Node<Pattern<'str, 'idt>>>),
 }
 
 #[derive(Debug, PartialEq)]

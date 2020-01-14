@@ -1,12 +1,12 @@
 use lib_arena::local::LocalUniqueArena;
 use lib_peek::PeekableLexer;
 
-use core_hir::{Hir, HirNode, Pattern, Expr, SimpleExpr, BindingMode, Literal};
+use core_hir::{Hir, Node, Pattern, Expr, SimpleExpr, BindingMode, Literal};
 use core_tokens::{Span, Lexer, kw, sym};
 
 #[derive(Clone, Copy)]
 pub struct Context<'str, 'idt, 'hir> {
-    pub arena: &'hir LocalUniqueArena<HirNode<'str, 'idt, 'hir>, 16>,
+    pub arena: &'hir LocalUniqueArena<Node<Hir<'str, 'idt, 'hir>>, 16>,
 }
 
 pub struct HirParser<'str, 'idt, 'hir, L> {
@@ -25,13 +25,13 @@ pub trait HasNode {
 }
 
 impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HasNode for HirParser<'str, 'idt, 'hir, L> {
-    type Node = HirNode<'str, 'idt, 'hir>;
-    type Expr = Expr<'str, 'idt>;
-    type SimpleExpr = SimpleExpr<'str, 'idt>;
+    type Node = Node<Hir<'str, 'idt, 'hir>>;
+    type Expr = Node<Expr<'str, 'idt>>;
+    type SimpleExpr = Node<SimpleExpr<'str, 'idt>>;
 }
 
 impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> Iterator for HirParser<'str, 'idt, 'hir, L> {
-    type Item = HirNode<'str, 'idt, 'hir>;
+    type Item = Node<Hir<'str, 'idt, 'hir>>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.parse()
@@ -43,7 +43,7 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
         Self { context, lexer: PeekableLexer::new(lexer), }
     }
 
-    pub fn alloc(&self, node: HirNode<'str, 'idt, 'hir>) -> &'hir mut HirNode<'str, 'idt, 'hir> {
+    pub fn alloc(&self, node: TNode<Self>) -> &'hir mut TNode<Self> {
         self.context.arena.alloc(node)
     }
 
@@ -51,7 +51,7 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
         use core_tokens::{Type, Grouping, GroupPos};
 
         let token = self.lexer.peek_token(1).next()?;
-        
+
         match token.ty {
             Type::Keyword(kw!(print)) => self.parse_print(),
             Type::Keyword(kw!(let)) => self.parse_let(),
@@ -80,9 +80,9 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
             }
         }
 
-        Some(HirNode {
+        Some(Node {
             span: start.span.to(end),
-            ty: Hir::Scope(inner),
+            val: Hir::Scope(inner),
         })
     }
 
@@ -91,9 +91,9 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
         let ident = self.lexer.parse_ident()?;
         let end = self.lexer.parse_sym(Some(sym!(;)))?;
 
-        Some(HirNode {
+        Some(Node {
             span: start.span.to(end.span),
-            ty: Hir::Print(ident.ty),
+            val: Hir::Print(ident.ty),
         })
     }
 
@@ -104,11 +104,13 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
         let value = self.parse_expr()?;
         let end = self.lexer.parse_sym(Some(sym!(;)))?;
 
-        Some(HirNode {
+        Some(Node {
             span: start.span.to(end.span),
-            ty: Hir::Let {
-                pat: Pattern::Ident(ident.ty, BindingMode::Value),
-                value,
+            val: Hir::Let {
+                value, pat: Node {
+                    val: Pattern::Ident(ident.ty, BindingMode::Value),
+                    span: ident.span,
+                },
             }
         })
     }
@@ -136,26 +138,33 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
 
                     let next = self.parse_simple_expr()?;
 
-                    return Some(Expr::BinOp(
-                        core_hir::Operator::Symbol(sym),
-                        expr,
-                        next,
-                    ))
+                    return Some(Node {
+                        span: expr.span.to(next.span),
+                        val: Expr::BinOp(
+                            core_hir::Operator::Symbol(sym),
+                            expr,
+                            next,
+                        ),
+                    })
                 }
             }
 
             break
         }
 
-        Some(Expr::Simple(expr))
+        Some(Node {
+            span: expr.span,
+            val: Expr::Simple(expr),
+        })
     }
 
     pub fn parse_simple_expr(&mut self) -> Option<TSimpleExpr<Self>> {
         use core_tokens::Type;
 
         let expr = self.lexer.peek_token(1).next()?;
+        let span = expr.span;
 
-        let token = match expr.ty {
+        let val = match expr.ty {
             Type::Ident(ident) => SimpleExpr::Ident(ident),
             Type::Str(s) => SimpleExpr::Literal(Literal::Str(s)),
             Type::Int(x) => SimpleExpr::Literal(Literal::Int(x)),
@@ -165,6 +174,6 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
 
         self.lexer.parse_token();
 
-        Some(token)
+        Some(Node { val, span, })
     }
 }
