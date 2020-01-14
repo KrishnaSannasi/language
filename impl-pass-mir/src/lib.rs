@@ -1,5 +1,5 @@
 use core_tokens::Ident;
-use core_hir::{HirNode, Hir, Pattern, BindingMode, Expr, SimpleExpr};
+use core_hir::{Node, Hir, Pattern, BindingMode, Expr, SimpleExpr};
 use core_mir::{Mir, Load, Reg};
 
 use std::collections::HashMap;
@@ -23,7 +23,7 @@ pub struct Scope<'idt> {
     locals: HashMap<Ident<'idt>, Reg>,
 }
 
-pub fn encode<'str: 'hir, 'idt: 'hir, 'hir, H: IntoIterator<Item = HirNode<'str, 'idt, 'hir>>>(hir: H) -> Option<MirDigest> {
+pub fn encode<'str: 'hir, 'idt: 'hir, 'hir, H: IntoIterator<Item = Node<Hir<'str, 'idt, 'hir>>>>(hir: H) -> Option<MirDigest> {
     let mut encoder = Encoder::default();
 
     encoder.scopes.push(Scope::default());
@@ -36,7 +36,7 @@ pub fn encode<'str: 'hir, 'idt: 'hir, 'hir, H: IntoIterator<Item = HirNode<'str,
     })
 }
 
-fn encode_iter<'str: 'hir, 'idt: 'hir, 'hir, H: IntoIterator<Item = HirNode<'str, 'idt, 'hir>>>(
+fn encode_iter<'str: 'hir, 'idt: 'hir, 'hir, H: IntoIterator<Item = Node<Hir<'str, 'idt, 'hir>>>>(
     encoder: &mut Encoder<'idt>,
     hir: H
 ) -> Option<()> {
@@ -101,11 +101,11 @@ impl<'idt, 'str, 'hir> Encoder<'idt> {
     }
 }
 
-impl<'idt, 'str, 'hir> Encode<HirNode<'str, 'idt, 'hir>> for Encoder<'idt> {
+impl<'idt, 'str, 'hir> Encode<Node<Hir<'str, 'idt, 'hir>>> for Encoder<'idt> {
     type Output = ();
 
-    fn encode(&mut self, value: HirNode<'str, 'idt, 'hir>) -> Option<Self::Output> {
-        match value.ty {
+    fn encode(&mut self, value: Node<Hir<'str, 'idt, 'hir>>) -> Option<Self::Output> {
+        match value.val {
             Hir::Rec(infallible, _) => match infallible {}
             Hir::Print(id) => {
                 let print = self.get(id).map(Mir::Print)?;
@@ -117,7 +117,7 @@ impl<'idt, 'str, 'hir> Encode<HirNode<'str, 'idt, 'hir>> for Encoder<'idt> {
                 self.close_scope();
             }
             Hir::Let { pat, value } => {
-                let to = |this: &mut Self| match pat {
+                let to = |this: &mut Self| match pat.val {
                     Pattern::Literal(_) => {
                         unreachable!(r#"invalid "let" pattern, cannot bind to literals"#)
                     }
@@ -132,7 +132,7 @@ impl<'idt, 'str, 'hir> Encode<HirNode<'str, 'idt, 'hir>> for Encoder<'idt> {
                     }
                 };
 
-                let mir = match value {
+                let mir = match value.val {
                     Expr::PreOp(op, right) => unreachable!("preop"),
                     Expr::PostOp(op, left) => unreachable!("postop"),
                     Expr::Simple(simple) => Mir::Load { to: to(self), from: self.encode(simple)? },
@@ -167,13 +167,19 @@ impl<'idt, 'str, 'hir> Encode<HirNode<'str, 'idt, 'hir>> for Encoder<'idt> {
     }
 }
 
-impl<'idt, 'str, 'hir> Encode<SimpleExpr<'str, 'idt>> for Encoder<'idt> {
+impl<'idt, 'str, 'hir> Encode<Node<SimpleExpr<'str, 'idt>>> for Encoder<'idt> {
     type Output = Load;
 
 
-    fn encode(&mut self, value: SimpleExpr<'str, 'idt>) -> Option<Self::Output> {
-        match value {
-            SimpleExpr::Ident(ident) => self.get(ident).map(Load::Reg),
+    fn encode(&mut self, value: Node<SimpleExpr<'str, 'idt>>) -> Option<Self::Output> {
+        match value.val {
+            SimpleExpr::Ident(ident) => match self.get(ident) {
+                Some(reg) => Some(Load::Reg(reg)),
+                None => {
+                    eprintln!("ERROR: detected an uninitialized variable: {:?} at {:?}", ident, value.span);
+                    None
+                }
+            }
             SimpleExpr::Literal(lit) => {
                 use core_hir::Literal;
                 
