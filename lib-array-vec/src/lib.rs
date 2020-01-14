@@ -1,5 +1,5 @@
 #![feature(const_generics, dropck_eyepatch)]
-#![no_std]
+// #![no_std]
 
 use core::mem::MaybeUninit;
 
@@ -131,23 +131,58 @@ struct Array<T, const N: usize>(T, [T; N]);
 
 pub struct ArrayDeque<T, const N: usize> {
     data: MaybeUninit<Array<T, N>>,
+    size_info: SizeInfo<N>,
+}
+
+#[derive(Clone, Copy)]
+pub struct SizeInfo<const N: usize> {
     start: usize,
     end: usize,
+}
+
+impl<const N: usize> SizeInfo<N> {
+    const CAPACITY: usize = N + 1;
+
+    const fn len(&self) -> usize {
+        let slow = {
+            let (len, ovf) = self.end.overflowing_sub(self.start);
+            
+            let nlen = Self::CAPACITY
+                .wrapping_sub(self.start)
+                .wrapping_add(self.end);
+            
+            [len, nlen][ovf as usize]
+        };
+
+        let fast = self.end.wrapping_sub(self.start) & N;
+        
+        [slow, fast][Self::CAPACITY.is_power_of_two() as usize]
+    }
+
+    const fn is_empty(&self) -> bool {
+        self.start == self.end
+    }
+    
+    pub fn inc(var: &mut usize) {
+        Self::add(var, 1)
+    }
+
+    pub fn add(var: &mut usize, n: usize) {
+        *var = (*var + n) & Self::CAPACITY;
+    }
 }
 
 impl<T, const N: usize> ArrayDeque<T, N> {
     pub const fn new() -> Self {
         Self {
             data: MaybeUninit::uninit(),
-            start: 0,
-            end: 0,
+            size_info: SizeInfo {
+                start: 0,
+                end: 0,
+            },
         }
     }
     
-    const fn next_slot(slot: usize) -> usize {
-        (slot + 1) % (N + 1)
-    }
-
     fn as_ptr(&self) -> *const T {
         self.data.as_ptr() as *const T
     }
@@ -157,19 +192,15 @@ impl<T, const N: usize> ArrayDeque<T, N> {
     }
 
     pub const fn is_empty(&self) -> bool {
-        self.start == self.end
+        self.size_info.is_empty()
     }
 
-    pub fn is_full(&self) -> bool {
-        if N == 0 {
-            true
-        } else {
-            Self::next_slot(self.start) == self.end
-        }
+    pub const fn is_full(&self) -> bool {
+        self.len() == N
     }
 
     pub const fn len(&self) -> usize {
-        self.end.wrapping_sub(self.start) % N
+        self.size_info.len()
     }
 
     pub unsafe fn push_back_unchecked(&mut self, value: T) {
@@ -177,9 +208,9 @@ impl<T, const N: usize> ArrayDeque<T, N> {
 
         let ptr = self.as_mut_ptr();
 
-        ptr.add(self.end).write(value);
+        ptr.add(self.size_info.end).write(value);
 
-        self.end = Self::next_slot(self.end);
+        SizeInfo::<N>::inc(&mut self.size_info.end);
     }
 
     pub fn try_push_back(&mut self, value: T) -> Result<(), T> {
@@ -194,7 +225,7 @@ impl<T, const N: usize> ArrayDeque<T, N> {
     }
 
     pub fn push_back(&mut self, value: T) {
-        assert!(!self.is_full());
+        assert!(!self.is_full(), "Tried to push into a full queue");
 
         unsafe {
             self.push_back_unchecked(value)
@@ -206,9 +237,9 @@ impl<T, const N: usize> ArrayDeque<T, N> {
 
         let ptr = self.as_ptr();
 
-        let value = ptr.add(self.start).read();
+        let value = ptr.add(self.size_info.start).read();
 
-        self.start = Self::next_slot(self.start);
+        SizeInfo::<N>::inc(&mut self.size_info.start);
 
         value
     }
@@ -232,7 +263,7 @@ impl<T, const N: usize> ArrayDeque<T, N> {
     }
 
     pub unsafe fn front_unchecked(&self) -> &T {
-        &*self.as_ptr().add(self.start)
+        &*self.as_ptr().add(self.size_info.start)
     }
 
     pub fn front(&self) -> Option<&T> {
@@ -246,7 +277,7 @@ impl<T, const N: usize> ArrayDeque<T, N> {
     }
 
     pub fn iter(&self) -> Iter<'_, T, N> {
-        Iter { ptr: self.as_ptr(), start: self.start, end: self.end, lt: PhantomData }
+        Iter { ptr: self.as_ptr(), size_info: self.size_info, lt: PhantomData }
     }
 }
 
@@ -254,43 +285,95 @@ use core::marker::PhantomData;
 
 pub struct Iter<'a, T, const N: usize> {
     ptr: *const T,
-    start: usize,
-    end: usize,
+    size_info: SizeInfo<N>,
     lt: PhantomData<&'a Array<T, N>>
 }
 
+impl<'a, T, const N: usize> ExactSizeIterator for Iter<'a, T, N> {}
+impl<'a, T, const N: usize> core::iter::FusedIterator for Iter<'a, T, N> {}
 impl<'a, T, const N: usize> Iterator for Iter<'a, T, N> {
     type Item = &'a T;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.start == self.end {
+        if N == 0 || self.size_info.is_empty() {
             None
         } else {
             unsafe {
-                let ptr = self.ptr.add(self.start);
-
-                self.start = ArrayDeque::<T, N>::next_slot(self.start);
-
+                let ptr = self.ptr.add(self.size_info.start);
+                SizeInfo::<N>::inc(&mut self.size_info.start);
                 Some(&*ptr)
             }
         }
     }
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        if self.start == self.end {
-            return None
+        if N == 0 || n >= self.size_info.len() {
+            None
+        } else {
+            SizeInfo::<N>::add(&mut self.size_info.start, n);
+
+            unsafe {
+                let ptr = self.ptr.add(self.size_info.start);
+                SizeInfo::<N>::inc(&mut self.size_info.start);
+                Some(&*ptr)
+            }
         }
+    }
 
-        let (start, ovf) = self.start.overflowing_add(n);
-
-        if ovf {
-            self.start = self.end;
-            return None
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        if N == 0 {
+            (0, Some(0))
+        } else {
+            let len = self.size_info.len();
+            (len, Some(len))
         }
+    }
+}
 
-        self.start = start % (N + 1);
+pub struct IterMut<'a, T, const N: usize> {
+    ptr: *mut T,
+    size_info: SizeInfo<N>,
+    lt: PhantomData<&'a mut Array<T, N>>
+}
 
-        self.next()
+impl<'a, T, const N: usize> ExactSizeIterator for IterMut<'a, T, N> {}
+impl<'a, T, const N: usize> core::iter::FusedIterator for IterMut<'a, T, N> {}
+impl<'a, T, const N: usize> Iterator for IterMut<'a, T, N> {
+    type Item = &'a mut T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if N == 0 || self.size_info.is_empty() {
+            None
+        } else {
+            unsafe {
+                let ptr = self.ptr.add(self.size_info.start);
+                SizeInfo::<N>::inc(&mut self.size_info.start);
+                Some(&mut *ptr)
+            }
+        }
+    }
+
+    fn nth(&mut self, n: usize) -> Option<Self::Item> {
+        if N == 0 || n >= self.size_info.len() {
+            None
+        } else {
+            SizeInfo::<N>::add(&mut self.size_info.start, n);
+
+            unsafe {
+                let ptr = self.ptr.add(self.size_info.start);
+                SizeInfo::<N>::inc(&mut self.size_info.start);
+                Some(&mut *ptr)
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        if N == 0 {
+            (0, Some(0))
+        } else {
+            let len = self.size_info.len();
+            (len, Some(len))
+        }
     }
 }
 
@@ -301,4 +384,102 @@ impl<'a, T, const N: usize> IntoIterator for &'a ArrayDeque<T, N> {
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
     }
+}
+
+unsafe impl<#[may_dangle] T, const N: usize> Drop for ArrayDeque<T, N> {
+    fn drop(&mut self) {
+        unsafe {
+            let SizeInfo { start, end } = self.size_info;
+
+            if let Some(len) = end.checked_sub(start) {
+                core::ptr::drop_in_place(core::slice::from_raw_parts_mut(
+                    self.as_mut_ptr().add(start),
+                    len
+                ))
+            } else {
+                let ptr = self.as_mut_ptr();
+                core::ptr::drop_in_place(core::slice::from_raw_parts_mut(
+                    ptr,
+                    start,
+                ));
+
+                core::ptr::drop_in_place(core::slice::from_raw_parts_mut(
+                    ptr.add(end),
+                    SizeInfo::<N>::CAPACITY - end,
+                ));
+            }
+        }
+    }
+}
+
+#[test]
+fn foo() {
+    let mut a = ArrayDeque::<_, 15>::new();
+    let mut v = Vec::new();
+
+    for i in 0..14 {
+        a.push_back(i);
+        v.push(i);
+
+        for _ in 0..1000 {
+            let len = a.len();
+            assert_eq!(len, v.len());
+            a.push_back(0);
+            a.pop_front();
+            assert_eq!(a.len(), len);
+        }
+    }
+    
+    let mut a = ArrayDeque::<_, 20>::new();
+    let mut v = Vec::new();
+
+    for i in 0..19 {
+        a.push_back(i);
+        v.push(i);
+
+        for _ in 0..1000 {
+            let len = a.len();
+            assert_eq!(len, v.len());
+            a.push_back(0);
+            a.pop_front();
+            assert_eq!(a.len(), len);
+        }
+    }
+}
+
+#[test]
+fn iter() {
+    let mut a = ArrayDeque::<_, 15>::new();
+    
+    for i in 0..15 {
+        a.push_back(i)
+    }
+    
+    for _ in 0..5 {
+        let i = a.pop_front();
+        a.push_back(i);
+    }
+
+    for _ in 0..15 {
+        a.pop_front();
+    }
+
+    for i in 0..15 {
+        a.push_back(i)
+    }
+    
+    for n in 1..10 {
+        dbg!();
+        dbg!();
+        dbg!(n);
+        dbg!();
+        for (i, &v) in a.iter().step_by(n).enumerate() {
+            dbg!(v);
+            assert_eq!(i * n, v);
+        }
+    }
+}
+
+pub fn len(array: &mut IterMut<(), 3>, n: usize) -> Option<()> {
+    array.nth(n).copied()
 }
