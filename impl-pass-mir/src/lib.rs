@@ -38,7 +38,7 @@ pub fn encode<'str: 'hir, 'idt: 'hir, 'hir, H: IntoIterator<Item = HirNode<'str,
 
 fn encode_iter<'str: 'hir, 'idt: 'hir, 'hir, H: IntoIterator<Item = HirNode<'str, 'idt, 'hir>>>(
     encoder: &mut Encoder<'idt>,
-    mut hir: H
+    hir: H
 ) -> Option<()> {
     hir.into_iter().try_for_each(move |hir| encoder.encode(hir))
 }

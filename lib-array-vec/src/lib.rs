@@ -155,7 +155,7 @@ impl<const N: usize> SizeInfo<N> {
         };
 
         let fast = self.end.wrapping_sub(self.start) & N;
-        
+
         [slow, fast][Self::CAPACITY.is_power_of_two() as usize]
     }
 
@@ -168,7 +168,7 @@ impl<const N: usize> SizeInfo<N> {
     }
 
     pub fn add(var: &mut usize, n: usize) {
-        *var = (*var + n) & Self::CAPACITY;
+        *var = (*var + n) % Self::CAPACITY;
     }
 }
 
@@ -478,8 +478,4 @@ fn iter() {
             assert_eq!(i * n, v);
         }
     }
-}
-
-pub fn len(array: &mut IterMut<(), 3>, n: usize) -> Option<()> {
-    array.nth(n).copied()
 }
