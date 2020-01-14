@@ -22,9 +22,15 @@ fn main() {
 
     let arena = LocalUniqueArena::new();
     let context = impl_pass_hir::Context { arena: &arena };
-    let mut hir_parser = impl_pass_hir::HirParser::new(lexer, context);
-    
-    while let Some(hir_let) = hir_parser.parse() {
-        dbg!(hir_let);
+    let hir_parser = impl_pass_hir::HirParser::new(lexer, context);
+
+    let digest = impl_pass_mir::encode(hir_parser).expect("hi");
+
+    for mir in digest.mir {
+        println!("{:?}", mir);
     }
+    
+    // while let Some(hir_let) = hir_parser.parse() {
+    //     dbg!(hir_let);
+    // }
 }

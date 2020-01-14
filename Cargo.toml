@@ -5,9 +5,11 @@ members = [
 
     'core-tokens',
     'core-hir',
+    'core-mir',
 
     'impl-lexer',
     'impl-pass-hir',
+    'impl-pass-mir',
 
     'lib-arena',
     'lib-thread-local',
