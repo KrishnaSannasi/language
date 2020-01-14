@@ -13,7 +13,8 @@ pub enum Hir<'str, 'idt, 'hir> {
         value: Expr<'str, 'idt>,
     },
     Print(Ident<'idt>),
-    Rec(&'hir mut Hir<'str, 'idt, 'hir>),
+    Scope(Vec<HirNode<'str, 'idt, 'hir>>),
+    Rec(std::convert::Infallible, &'hir mut Hir<'str, 'idt, 'hir>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

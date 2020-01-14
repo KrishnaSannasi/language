@@ -30,6 +30,14 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HasNode for HirParser<'str, 'idt, '
     type SimpleExpr = SimpleExpr<'str, 'idt>;
 }
 
+impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> Iterator for HirParser<'str, 'idt, 'hir, L> {
+    type Item = HirNode<'str, 'idt, 'hir>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.parse()
+    }
+}
+
 impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
     pub fn new(lexer: L, context: Context<'str, 'idt, 'hir>) -> Self {
         Self { context, lexer: PeekableLexer::new(lexer), }
@@ -40,15 +48,42 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
     }
 
     pub fn parse(&mut self) -> Option<TNode<Self>> {
-        use core_tokens::Type;
+        use core_tokens::{Type, Grouping, GroupPos};
 
         let token = self.lexer.peek_token(1).next()?;
         
         match token.ty {
             Type::Keyword(kw!(print)) => self.parse_print(),
             Type::Keyword(kw!(let)) => self.parse_let(),
+            Type::Grouping(GroupPos::Start, Grouping::Curly) => self.parse_scope(),
             _ => None,
         }
+    }
+
+    pub fn parse_scope(&mut self) -> Option<TNode<Self>> {
+        use core_tokens::{Type, Grouping, GroupPos};
+
+        let mut inner = Vec::new();
+
+        let start = self.lexer.parse_grouping(Some((GroupPos::Start, Grouping::Curly)))?;
+        let mut end;
+
+        loop {
+            let peek = self.lexer.peek_token(1).next()?;
+            end = peek.span;
+            
+            if let Type::Grouping(GroupPos::End, Grouping::Curly) = peek.ty {
+                self.lexer.parse_token();
+                break
+            } else {
+                inner.push(self.parse()?)
+            }
+        }
+
+        Some(HirNode {
+            span: start.span.to(end),
+            ty: Hir::Scope(inner),
+        })
     }
 
     pub fn parse_print(&mut self) -> Option<TNode<Self>> {
