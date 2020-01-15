@@ -7,6 +7,7 @@ pub struct Node<N> {
 }
 
 pub type HirNode<'str, 'idt, 'hir> = Node<Hir<'str, 'idt, 'hir>>;
+pub type Scope<'str, 'idt, 'hir> = Vec<Node<Hir<'str, 'idt, 'hir>>>;
 
 #[derive(Debug, PartialEq)]
 pub enum Hir<'str, 'idt, 'hir> {
@@ -14,9 +15,20 @@ pub enum Hir<'str, 'idt, 'hir> {
         pat: Node<Pattern<'str, 'idt>>,
         value: Node<Expr<'str, 'idt>>,
     },
+    If {
+        if_branch: If<'str, 'idt, 'hir>,
+        else_if_branches: Vec<If<'str, 'idt, 'hir>>,
+        else_branch: Option<Box<Node<Scope<'str, 'idt, 'hir>>>>,
+    },
     Print(Ident<'idt>),
-    Scope(Vec<Node<Hir<'str, 'idt, 'hir>>>),
+    Scope(Scope<'str, 'idt, 'hir>),
     Rec(std::convert::Infallible, &'hir mut Hir<'str, 'idt, 'hir>),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct If<'str, 'idt, 'hir> {
+    pub cond: Node<Expr<'str, 'idt>>,
+    pub branch: Node<Scope<'str, 'idt, 'hir>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

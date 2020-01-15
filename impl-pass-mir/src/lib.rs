@@ -161,6 +161,9 @@ impl<'idt, 'str, 'hir> Encode<Node<Hir<'str, 'idt, 'hir>>> for Encoder<'idt> {
 
                 self.mir.push(mir);
             }
+            Hir::If { if_branch,  else_if_branches, else_branch, } => {
+                todo!("ifs are not implemented")
+            }
         }
         
         Some(())
