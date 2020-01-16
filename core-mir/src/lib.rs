@@ -4,7 +4,8 @@ pub struct Reg(pub u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BinOpType {
-    Add, Sub, Mul, Div
+    Add, Sub, Mul, Div,
+    Equal, NotEqual, LessThan, LessThanOrEqual, GreaterThan, GreaterThanOrEqual
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

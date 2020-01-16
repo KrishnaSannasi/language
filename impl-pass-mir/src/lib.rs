@@ -141,11 +141,7 @@ impl<'idt, 'str, 'hir> Encoder<'idt> {
     }
 }
 
-
-impl<'idt, 'str, F> Encode<(
-    Node<Expr<'str, 'idt>>,
-    F
-)> for Encoder<'idt>
+impl<'idt, 'str, F> Encode<(Node<Expr<'str, 'idt>>, F)> for Encoder<'idt>
 where
     F: FnOnce(&mut Self) -> Reg
 {
@@ -153,9 +149,11 @@ where
 
     fn encode(&mut self, (value, to): (Node<Expr<'str, 'idt>>, F)) -> Option<Self::Output> {
         let reg;
+
         let mir = match value.val {
-            Expr::PreOp(op, right) => unreachable!("preop"),
-            Expr::PostOp(op, left) => unreachable!("postop"),
+            Expr::PreOp(op, right) => todo!("preop"),
+            Expr::PostOp(op, left) => todo!("postop"),
+            Expr::Tuple(lit) => todo!("tuple"),
             Expr::Simple(simple) => {
                 reg = to(self);
                 Mir::Load { to: reg, from: self.encode(simple)? }
@@ -175,6 +173,14 @@ where
                         sym!(-) => BinOpType::Sub,
                         sym!(*) => BinOpType::Mul,
                         sym!(/) => BinOpType::Div,
+                        
+                        sym!(==) => BinOpType::Equal,
+                        sym!(!=) => BinOpType::NotEqual,
+                        sym!(>=) => BinOpType::GreaterThanOrEqual,
+                        sym!(<=) => BinOpType::LessThanOrEqual,
+                        sym!(>) => BinOpType::GreaterThan,
+                        sym!(<) => BinOpType::LessThan,
+
                         _ => return None
                     }
                 };
@@ -230,6 +236,24 @@ impl<'idt, 'str, 'hir> Encode<Node<Hir<'str, 'idt, 'hir>>> for Encoder<'idt> {
 
                 self.encode((value, to))?;
             }
+            Hir::Mut { pat, value } => {
+                let to = match pat.val {
+                    Pattern::Literal(_) => {
+                        unreachable!(r#"invalid "let" pattern, cannot bind to literals"#)
+                    }
+                    Pattern::Ident(_, BindingMode::Reference) => {
+                        unreachable!(r#"invalid "let" pattern, cannot bind to variables by reference"#)
+                    }
+                    Pattern::Tuple(_) => {
+                        unimplemented!(r#"invalid "let" pattern, tuples are not implemented"#)
+                    }
+                    Pattern::Ident(ident, BindingMode::Value) => {
+                        self.get(ident)?
+                    }
+                };
+
+                self.encode((value, |this: &mut Self| to))?;
+            }
             Hir::If { if_branch,  else_if_branches, else_branch, } => {
                 let trailing_block = self.new_block();
 
@@ -261,18 +285,13 @@ impl<'idt, 'str, 'hir> Encode<Node<Hir<'str, 'idt, 'hir>>> for Encoder<'idt> {
                         }
                     )?;
 
+                self.jump(init_block, next_branch);
+                
+                self.current_block = next_branch;
                 if let Some(branch) = else_branch {
-                    self.jump(init_block, next_branch);
-                    
-                    let bb_else_branch = next_branch;
-                    let current_block = self.current_block;
-                    self.current_block = bb_else_branch;
                     self.encode(branch.val)?;
-
-                    self.jump(self.current_block, trailing_block);
-                    
-                    self.current_block = current_block;
                 }
+                self.jump(self.current_block, trailing_block);
 
                 self.current_block = trailing_block;
             }
@@ -284,7 +303,6 @@ impl<'idt, 'str, 'hir> Encode<Node<Hir<'str, 'idt, 'hir>>> for Encoder<'idt> {
 
 impl<'idt, 'str, 'hir> Encode<Node<SimpleExpr<'str, 'idt>>> for Encoder<'idt> {
     type Output = Load;
-
 
     fn encode(&mut self, value: Node<SimpleExpr<'str, 'idt>>) -> Option<Self::Output> {
         match value.val {
@@ -316,9 +334,6 @@ impl<'idt, 'str, 'hir> Encode<Node<SimpleExpr<'str, 'idt>>> for Encoder<'idt> {
                         })
                     },
                 }
-            }
-            SimpleExpr::Tuple(lit) => {
-                todo!()
             }
         }
     }    

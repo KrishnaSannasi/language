@@ -55,6 +55,7 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
         match token.ty {
             Type::Keyword(kw!(print)) => self.parse_print(),
             Type::Keyword(kw!(let)) => self.parse_let(),
+            Type::Ident(_) => self.parse_mut(),
             Type::Keyword(kw!(if)) => self.parse_if(),
             Type::Grouping(GroupPos::Start, Grouping::Curly) => {
                 let scope = self.parse_scope()?;
@@ -115,6 +116,23 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
         Some(Node {
             span: start.span.to(end.span),
             val: Hir::Let {
+                value, pat: Node {
+                    val: Pattern::Ident(ident.ty, BindingMode::Value),
+                    span: ident.span,
+                },
+            }
+        })
+    }
+
+    pub fn parse_mut(&mut self) -> Option<TNode<Self>> {
+        let ident = self.lexer.parse_ident()?;
+        self.lexer.parse_sym(Some(sym!(=)))?;
+        let value = self.parse_expr()?;
+        let end = self.lexer.parse_sym(Some(sym!(;)))?;
+
+        Some(Node {
+            span: ident.span.to(end.span),
+            val: Hir::Mut {
                 value, pat: Node {
                     val: Pattern::Ident(ident.ty, BindingMode::Value),
                     span: ident.span,
@@ -194,7 +212,9 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
                         | sym!(==)
                         | sym!(!=)
                         | sym!(>=)
-                        | sym!(<=) => (),
+                        | sym!(<=)
+                        | sym!(>)
+                        | sym!(<) => (),
                         _ => break 'simple
                     }
 

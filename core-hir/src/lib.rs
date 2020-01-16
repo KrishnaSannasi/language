@@ -20,6 +20,10 @@ pub enum Hir<'str, 'idt, 'hir> {
         else_if_branches: Vec<If<'str, 'idt, 'hir>>,
         else_branch: Option<Box<Node<Scope<'str, 'idt, 'hir>>>>,
     },
+    Mut {
+        pat: Node<Pattern<'str, 'idt>>,
+        value: Node<Expr<'str, 'idt>>,
+    },
     Print(Ident<'idt>),
     Scope(Scope<'str, 'idt, 'hir>),
     Rec(std::convert::Infallible, &'hir mut Hir<'str, 'idt, 'hir>),
@@ -50,6 +54,7 @@ pub enum Expr<'str, 'idt> {
     PreOp(Operator, Node<SimpleExpr<'str, 'idt>>),
     PostOp(Operator, Node<SimpleExpr<'str, 'idt>>),
     BinOp(Operator, Node<SimpleExpr<'str, 'idt>>, Node<SimpleExpr<'str, 'idt>>),
+    Tuple(Vec<Node<Pattern<'str, 'idt>>>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -62,7 +67,6 @@ pub enum Operator {
 pub enum SimpleExpr<'str, 'idt> {
     Literal(Literal<'str>),
     Ident(Ident<'idt>),
-    Tuple(Vec<Node<Pattern<'str, 'idt>>>),
 }
 
 #[derive(Debug, PartialEq)]
