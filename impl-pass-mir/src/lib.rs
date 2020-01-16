@@ -1,24 +1,37 @@
 use core_tokens::Ident;
 use core_hir::{Node, Hir, Pattern, BindingMode, Expr, SimpleExpr};
-use core_mir::{Mir, Load, Reg, Target};
+use core_mir::{Mir, Load, Reg};
 
-use lib_smallvec::SmallVec;
+use std::collections::{HashMap, HashSet};
 
-use std::collections::HashMap;
+pub struct Block {
+    mir: Vec<Mir>,
+    parents: HashSet<usize>,
+    children: HashSet<usize>,
+}
 
 pub struct MirDigest {
-    mir: Vec<Mir>,
-    targets: Vec<Target>,
+    blocks: Vec<Block>,
     max_reg_count: u64,
 }
 
-impl MirDigest {
+impl Block {
     pub fn mir(&self) -> &[Mir] {
         &self.mir
     }
     
-    pub fn targets(&self) -> &[Target] {
-        &self.targets
+    pub fn parents(&self) -> &HashSet<usize> {
+        &self.parents
+    }
+    
+    pub fn children(&self) -> &HashSet<usize> {
+        &self.children
+    }
+}
+
+impl MirDigest {
+    pub fn blocks(&self) -> &[Block] {
+        &self.blocks
     }
     
     pub fn max_reg_count(&self) -> u64 {
@@ -28,11 +41,11 @@ impl MirDigest {
 
 #[derive(Default)]
 struct Encoder<'idt> {
-    mir: Vec<Mir>,
-    targets: Vec<Target>,
+    blocks: Vec<Block>,
     scopes: Vec<Scope<'idt>>,
     max_reg_count: u64,
     current_scope: usize,
+    current_block: usize,
 }
 
 #[derive(Default)]
@@ -44,13 +57,18 @@ pub struct Scope<'idt> {
 pub fn encode<'str: 'hir, 'idt: 'hir, 'hir, H: IntoIterator<Item = Node<Hir<'str, 'idt, 'hir>>>>(hir: H) -> Option<MirDigest> {
     let mut encoder = Encoder::default();
 
+    encoder.blocks.push(Block {
+        mir: Vec::new(),
+        parents: HashSet::new(),
+        children: HashSet::new(),
+    });
+
     encoder.scopes.push(Scope::default());
 
     encode_iter(&mut encoder, hir)?;
 
     Some(MirDigest {
-        mir: encoder.mir,
-        targets: encoder.targets,
+        blocks: encoder.blocks,
         max_reg_count: encoder.max_reg_count,
     })
 }
@@ -109,17 +127,16 @@ impl<'idt, 'str, 'hir> Encoder<'idt> {
         reg
     }
 
-    unsafe fn new_target(&mut self) -> Target {
-        let target = self.targets.len();
-        self.targets.push(Target::new(0));
-        Target::new(target)
-    }
+    fn new_block(&mut self) -> usize {
+        let target = self.blocks.len();
 
-    fn resolve_target(&mut self, target: Target) {
-        unsafe {
-            assert!(!self.mir.is_empty());
-            *self.targets.get_unchecked_mut(target.get()) = Target::new(self.mir.len() - 1);
-        }
+        self.blocks.push(Block {
+            mir: Vec::new(),
+            parents: HashSet::new(),
+            children: HashSet::new(),
+        });
+
+        target
     }
 
     fn open_scope(&mut self) {
@@ -131,6 +148,18 @@ impl<'idt, 'str, 'hir> Encoder<'idt> {
 
     fn close_scope(&mut self) {
         self.current_scope = self.scopes[self.current_scope].parent;
+    }
+
+    fn jump(&mut self, from: usize, to: usize) {
+        self.blocks[from].mir.push(Mir::Jump(to));
+        self.blocks[to].parents.insert(from);
+        self.blocks[from].children.insert(to);
+    }
+
+    fn branch(&mut self, cond: Reg, from: usize, to: usize) {
+        self.blocks[from].mir.push(Mir::BranchTrue { cond, target: to });
+        self.blocks[to].parents.insert(from);
+        self.blocks[from].children.insert(to);
     }
 }
 
@@ -178,7 +207,7 @@ where
             },
         };
 
-        self.mir.push(mir);
+        self.blocks[self.current_block].mir.push(mir);
         Some(reg)
     }
 }
@@ -203,7 +232,7 @@ impl<'idt, 'str, 'hir> Encode<Node<Hir<'str, 'idt, 'hir>>> for Encoder<'idt> {
             Hir::Scope(inner) => self.encode(inner)?,
             Hir::Print(id) => {
                 let print = self.get(id).map(Mir::Print)?;
-                self.mir.push(print);
+                self.blocks[self.current_block].mir.push(print);
             }
             Hir::Let { pat, value } => {
                 let to = |this: &mut Self| match pat.val {
@@ -224,68 +253,50 @@ impl<'idt, 'str, 'hir> Encode<Node<Hir<'str, 'idt, 'hir>>> for Encoder<'idt> {
                 self.encode((value, to))?;
             }
             Hir::If { if_branch,  else_if_branches, else_branch, } => {
-                let cond = self.encode((
-                    if_branch.cond,
-                    |this: &mut Self| this.temp()
-                ))?;
+                let trailing_block = self.new_block();
 
-                self.mir.push(Mir::PreOp {
-                    op: core_mir::PreOpType::Not,
-                    out: cond,
-                    arg: Load::Reg(cond),
-                });
-
-                let (if_chain_end, if_branch_end) = unsafe {
-                    (
-                        self.new_target(),
-                        self.new_target(),
-                    )
-                };
-
-                self.mir.push(Mir::BranchTrue {
-                    cond,
-                    target: if_branch_end,
-                });
-
-                self.encode(if_branch.branch.val)?;
-                self.mir.push(Mir::Jump(if_chain_end));
-
-                self.mir.push(Mir::NoOp("if_branch end"));
-                self.resolve_target(if_branch_end);
+                let init_block = self.current_block;
                 
-                for core_hir::If { cond, branch } in else_if_branches {
-                    let cond = self.encode((
-                        cond,
-                        |this: &mut Self| this.temp()
-                    ))?;
-    
-                    self.mir.push(Mir::PreOp {
-                        op: core_mir::PreOpType::Not,
-                        out: cond,
-                        arg: Load::Reg(cond),
-                    });
+                let next_branch = std::iter::once(if_branch)
+                    .chain(else_if_branches)
+                    .try_fold(
+                        self.new_block(),
+                        |bb_if_branch, core_hir::If { cond, branch, }| {
+                            let bb_next_branch = self.new_block();
 
-                    let if_else_branch_end = unsafe {
-                        self.new_target()
-                    };
+                            let current_block = self.current_block;
+                            
+                            self.current_block = init_block;
+                            let cond = self.encode((
+                                cond,
+                                |this: &mut Self| this.temp()
+                            ))?;
+                            self.branch(cond, self.current_block, bb_if_branch);
 
-                    self.mir.push(Mir::BranchTrue {
-                        cond,
-                        target: if_else_branch_end,
-                    });
+                            self.current_block = current_block;
+                            
+                            self.current_block = bb_if_branch;
+                            self.encode(branch.val)?;
+                            self.jump(self.current_block, trailing_block);
 
-                    self.encode(branch.val)?;
-                    self.mir.push(Mir::Jump(if_chain_end));
-                    self.mir.push(Mir::NoOp("if else branch end"));
-                    self.resolve_target(if_else_branch_end);
-                }
+                            Some(bb_next_branch)
+                        }
+                    )?;
 
                 if let Some(branch) = else_branch {
+                    self.jump(init_block, next_branch);
+                    
+                    let bb_else_branch = next_branch;
+                    let current_block = self.current_block;
+                    self.current_block = bb_else_branch;
                     self.encode(branch.val)?;
+
+                    self.jump(self.current_block, trailing_block);
+                    
+                    self.current_block = current_block;
                 }
 
-                self.mir.push(Mir::NoOp("if chain end"));
-                self.resolve_target(if_chain_end);
+                self.current_block = trailing_block;
             }
         }
         

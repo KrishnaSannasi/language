@@ -21,8 +21,8 @@ pub enum PreOpType {
 pub enum Mir {
     __,
     NoOp(&'static str),
-    Jump(Target),
-    BranchTrue { cond: Reg, target: Target },
+    Jump(usize),
+    BranchTrue { cond: Reg, target: usize },
     Load { to: Reg, from: Load },
     Print(Reg),
     BinOp {
@@ -36,19 +36,6 @@ pub enum Mir {
         out: Reg,
         arg: Load,
     },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Target(usize);
-
-impl Target {
-    pub const unsafe fn new(addr: usize) -> Self {
-        Self(addr)
-    }
-
-    pub const fn get(self) -> usize {
-        self.0
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
