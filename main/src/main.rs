@@ -26,26 +26,28 @@ fn main() {
     };
     
     println!("CODE");
+
+    let blocks = digest.blocks.iter().enumerate().filter_map(|(i, block)| match block {
+        Some(block) => Some((i, block)),
+        None => None
+    });
     
-    for (i, block) in digest.blocks().iter().enumerate() {
+    for (i, block) in blocks.clone() {
         println!("BLOCK({:3})", i);
-        for (i, mir) in block.mir().iter().enumerate() {
+        for (i, mir) in block.mir.iter().enumerate() {
             println!("{:3}: {:?}", i, mir);
         }
     }
 
     println!("\nBLOCK DATA");
     
-    for (i, block) in digest.blocks().iter().enumerate() {
-        print!("BLOCK({}): \n\tparents {{", i);
-        for parent in block.parents().iter() {
-            print!("{}, ", parent);
-        }
-        print!("}}\n\tchildren: {{");
-        for parent in block.children().iter() {
-            print!("{}, ", parent);
-        }
-        println!("}}");
+    for (i, block) in blocks {
+        println!(
+            "BLOCK({}):\
+            \n\tparents: {:?}\
+            \n\tchildren: {:?}",
+            i, block.parents, block.children
+        );
     }
     
     // while let Some(hir_let) = hir_parser.parse() {

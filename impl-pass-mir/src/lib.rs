@@ -4,39 +4,17 @@ use core_mir::{Mir, Load, Reg};
 
 use std::collections::{HashMap, HashSet};
 
+use vec_utils::VecExt;
+
 pub struct Block {
-    mir: Vec<Mir>,
-    parents: HashSet<usize>,
-    children: HashSet<usize>,
+    pub mir: Vec<Mir>,
+    pub parents: HashSet<usize>,
+    pub children: HashSet<usize>,
 }
 
 pub struct MirDigest {
-    blocks: Vec<Block>,
-    max_reg_count: u64,
-}
-
-impl Block {
-    pub fn mir(&self) -> &[Mir] {
-        &self.mir
-    }
-    
-    pub fn parents(&self) -> &HashSet<usize> {
-        &self.parents
-    }
-    
-    pub fn children(&self) -> &HashSet<usize> {
-        &self.children
-    }
-}
-
-impl MirDigest {
-    pub fn blocks(&self) -> &[Block] {
-        &self.blocks
-    }
-    
-    pub fn max_reg_count(&self) -> u64 {
-        self.max_reg_count
-    }
+    pub blocks: Vec<Option<Block>>,
+    pub max_reg_count: u64,
 }
 
 #[derive(Default)]
@@ -68,7 +46,7 @@ pub fn encode<'str: 'hir, 'idt: 'hir, 'hir, H: IntoIterator<Item = Node<Hir<'str
     encode_iter(&mut encoder, hir)?;
 
     Some(MirDigest {
-        blocks: encoder.blocks,
+        blocks: encoder.blocks.map(Some),
         max_reg_count: encoder.max_reg_count,
     })
 }

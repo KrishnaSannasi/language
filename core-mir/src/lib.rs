@@ -1,10 +1,5 @@
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct MirNode {
-
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Reg(pub u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
