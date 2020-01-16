@@ -2,7 +2,7 @@ use lib_arena::local::LocalUniqueArena;
 use lib_peek::PeekableLexer;
 
 use core_hir::{Hir, Node, Pattern, Expr, SimpleExpr, BindingMode, Literal};
-use core_tokens::{Span, Lexer, kw, sym};
+use core_tokens::{Lexer, kw, sym};
 
 #[derive(Clone, Copy)]
 pub struct Context<'str, 'idt, 'hir> {
@@ -150,6 +150,7 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
 
             match peek.ty {
                 Type::Keyword(kw!(if)) => {
+                    self.lexer.parse_keyword(Some(kw!(if)));
                     let cond = self.parse_expr()?;
                     let branch = self.parse_scope()?;
                     end_span = branch.span;
