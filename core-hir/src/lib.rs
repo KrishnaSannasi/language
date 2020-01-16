@@ -70,4 +70,5 @@ pub enum Literal<'str> {
     Str(Str<'str>),
     Int(u128),
     Float(f64),
+    Bool(bool),
 }

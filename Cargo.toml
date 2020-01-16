@@ -15,6 +15,7 @@ members = [
     'lib-thread-local',
     'lib-array-vec',
     'lib-intern',
+    'lib-smallvec',
     'lib-peek',
 ]
 

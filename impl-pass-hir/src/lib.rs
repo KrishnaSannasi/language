@@ -233,6 +233,8 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
             Type::Str(s) => SimpleExpr::Literal(Literal::Str(s)),
             Type::Int(x) => SimpleExpr::Literal(Literal::Int(x)),
             Type::Float(x) => SimpleExpr::Literal(Literal::Float(x)),
+            Type::Keyword(kw!(true)) => SimpleExpr::Literal(Literal::Bool(true)),
+            Type::Keyword(kw!(false)) => SimpleExpr::Literal(Literal::Bool(false)),
             _ => return None
         };
 

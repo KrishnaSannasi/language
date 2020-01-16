@@ -1,7 +1,5 @@
-use core_tokens::{Lexer, Type};
 use lib_arena::local::LocalUniqueArena;
 use lib_intern::{Interner, Store};
-use lib_thread_local::LazyThreadLocal;
 
 fn main() {
     let file = std::env::args().nth(1).unwrap();
@@ -26,8 +24,14 @@ fn main() {
 
     let digest = impl_pass_mir::encode(hir_parser).expect("hi");
 
-    for mir in digest.mir {
-        println!("{:?}", mir);
+    println!("TARGETS:");
+    for (i, mir) in digest.targets().iter().enumerate() {
+        println!("{:3}: {:?}", i, mir);
+    }
+    
+    println!("CODE:");
+    for (i, mir) in digest.mir().iter().enumerate() {
+        println!("{:3}: {:?}", i, mir);
     }
     
     // while let Some(hir_let) = hir_parser.parse() {

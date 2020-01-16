@@ -13,7 +13,16 @@ pub enum BinOpType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum PreOpType {
+    Not, Neg,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Mir {
+    __,
+    NoOp(&'static str),
+    Jump(Target),
+    BranchTrue { cond: Reg, target: Target },
     Load { to: Reg, from: Load },
     Print(Reg),
     BinOp {
@@ -22,11 +31,30 @@ pub enum Mir {
         left: Load,
         right: Load,
     },
+    PreOp {
+        op: PreOpType,
+        out: Reg,
+        arg: Load,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Target(usize);
+
+impl Target {
+    pub const unsafe fn new(addr: usize) -> Self {
+        Self(addr)
+    }
+
+    pub const fn get(self) -> usize {
+        self.0
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Load {
     Reg(Reg),
+    Bool(bool),
     U8(u8),
     U16(u16),
     U32(u32),

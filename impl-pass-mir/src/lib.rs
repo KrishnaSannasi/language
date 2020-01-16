@@ -1,17 +1,35 @@
 use core_tokens::Ident;
 use core_hir::{Node, Hir, Pattern, BindingMode, Expr, SimpleExpr};
-use core_mir::{Mir, Load, Reg};
+use core_mir::{Mir, Load, Reg, Target};
+
+use lib_smallvec::SmallVec;
 
 use std::collections::HashMap;
 
 pub struct MirDigest {
-    pub mir: Vec<Mir>,
-    pub max_reg_count: u64,
+    mir: Vec<Mir>,
+    targets: Vec<Target>,
+    max_reg_count: u64,
+}
+
+impl MirDigest {
+    pub fn mir(&self) -> &[Mir] {
+        &self.mir
+    }
+    
+    pub fn targets(&self) -> &[Target] {
+        &self.targets
+    }
+    
+    pub fn max_reg_count(&self) -> u64 {
+        self.max_reg_count
+    }
 }
 
 #[derive(Default)]
 struct Encoder<'idt> {
     mir: Vec<Mir>,
+    targets: Vec<Target>,
     scopes: Vec<Scope<'idt>>,
     max_reg_count: u64,
     current_scope: usize,
@@ -32,6 +50,7 @@ pub fn encode<'str: 'hir, 'idt: 'hir, 'hir, H: IntoIterator<Item = Node<Hir<'str
 
     Some(MirDigest {
         mir: encoder.mir,
+        targets: encoder.targets,
         max_reg_count: encoder.max_reg_count,
     })
 }
@@ -46,6 +65,7 @@ fn encode_iter<'str: 'hir, 'idt: 'hir, 'hir, H: IntoIterator<Item = Node<Hir<'st
 trait Encode<T> {
     type Output;
 
+    #[must_use]
     fn encode(&mut self, value: T) -> Option<Self::Output>;
 }
 
@@ -89,6 +109,19 @@ impl<'idt, 'str, 'hir> Encoder<'idt> {
         reg
     }
 
+    unsafe fn new_target(&mut self) -> Target {
+        let target = self.targets.len();
+        self.targets.push(Target::new(0));
+        Target::new(target)
+    }
+
+    fn resolve_target(&mut self, target: Target) {
+        unsafe {
+            assert!(!self.mir.is_empty());
+            *self.targets.get_unchecked_mut(target.get()) = Target::new(self.mir.len() - 1);
+        }
+    }
+
     fn open_scope(&mut self) {
         let parent = self.current_scope;
         self.current_scope = self.scopes.len();
@@ -101,20 +134,76 @@ impl<'idt, 'str, 'hir> Encoder<'idt> {
     }
 }
 
+
+impl<'idt, 'str, F> Encode<(
+    Node<Expr<'str, 'idt>>,
+    F
+)> for Encoder<'idt>
+where
+    F: FnOnce(&mut Self) -> Reg
+{
+    type Output = Reg;
+
+    fn encode(&mut self, (value, to): (Node<Expr<'str, 'idt>>, F)) -> Option<Self::Output> {
+        let reg;
+        let mir = match value.val {
+            Expr::PreOp(op, right) => unreachable!("preop"),
+            Expr::PostOp(op, left) => unreachable!("postop"),
+            Expr::Simple(simple) => {
+                reg = to(self);
+                Mir::Load { to: reg, from: self.encode(simple)? }
+            },
+            Expr::BinOp(op, left, right) => {
+                use core_hir::Operator;
+                use core_tokens::sym;
+                use core_mir::BinOpType;
+
+                let left = self.encode(left)?;
+                let right = self.encode(right)?;
+
+                let op = match op {
+                    Operator::Keyword(_) => return None,
+                    Operator::Symbol(op) => match op {
+                        sym!(+) => BinOpType::Add,
+                        sym!(-) => BinOpType::Sub,
+                        sym!(*) => BinOpType::Mul,
+                        sym!(/) => BinOpType::Div,
+                        _ => return None
+                    }
+                };
+                
+                reg = to(self);
+
+                Mir::BinOp { op, out: reg, left, right }
+            },
+        };
+
+        self.mir.push(mir);
+        Some(reg)
+    }
+}
+
+impl<'idt, 'str, 'hir> Encode<Vec<Node<Hir<'str, 'idt, 'hir>>>> for Encoder<'idt> {
+    type Output = ();
+
+    fn encode(&mut self, scope: Vec<Node<Hir<'str, 'idt, 'hir>>>) -> Option<Self::Output> {
+        self.open_scope();
+        encode_iter(self, scope)?;
+        self.close_scope();
+        Some(())
+    }
+}
+
 impl<'idt, 'str, 'hir> Encode<Node<Hir<'str, 'idt, 'hir>>> for Encoder<'idt> {
     type Output = ();
 
     fn encode(&mut self, value: Node<Hir<'str, 'idt, 'hir>>) -> Option<Self::Output> {
         match value.val {
             Hir::Rec(infallible, _) => match infallible {}
+            Hir::Scope(inner) => self.encode(inner)?,
             Hir::Print(id) => {
                 let print = self.get(id).map(Mir::Print)?;
                 self.mir.push(print);
-            }
-            Hir::Scope(inner) => {
-                self.open_scope();
-                encode_iter(self, inner)?;
-                self.close_scope();
             }
             Hir::Let { pat, value } => {
                 let to = |this: &mut Self| match pat.val {
@@ -132,37 +221,71 @@ impl<'idt, 'str, 'hir> Encode<Node<Hir<'str, 'idt, 'hir>>> for Encoder<'idt> {
                     }
                 };
 
-                let mir = match value.val {
-                    Expr::PreOp(op, right) => unreachable!("preop"),
-                    Expr::PostOp(op, left) => unreachable!("postop"),
-                    Expr::Simple(simple) => Mir::Load { to: to(self), from: self.encode(simple)? },
-                    Expr::BinOp(op, left, right) => {
-                        use core_hir::Operator;
-                        use core_tokens::sym;
-                        use core_mir::BinOpType;
-
-                        let left = self.encode(left)?;
-                        let right = self.encode(right)?;
-
-                        let op = match op {
-                            Operator::Keyword(_) => return None,
-                            Operator::Symbol(op) => match op {
-                                sym!(+) => BinOpType::Add,
-                                sym!(-) => BinOpType::Sub,
-                                sym!(*) => BinOpType::Mul,
-                                sym!(/) => BinOpType::Div,
-                                _ => return None
-                            }
-                        };
-                        
-                        Mir::BinOp { op, out: to(self), left, right }
-                    },
-                };
-
-                self.mir.push(mir);
+                self.encode((value, to))?;
             }
             Hir::If { if_branch,  else_if_branches, else_branch, } => {
-                todo!("ifs are not implemented")
+                let cond = self.encode((
+                    if_branch.cond,
+                    |this: &mut Self| this.temp()
+                ))?;
+
+                self.mir.push(Mir::PreOp {
+                    op: core_mir::PreOpType::Not,
+                    out: cond,
+                    arg: Load::Reg(cond),
+                });
+
+                let (if_chain_end, if_branch_end) = unsafe {
+                    (
+                        self.new_target(),
+                        self.new_target(),
+                    )
+                };
+
+                self.mir.push(Mir::BranchTrue {
+                    cond,
+                    target: if_branch_end,
+                });
+
+                self.encode(if_branch.branch.val)?;
+                self.mir.push(Mir::Jump(if_chain_end));
+
+                self.mir.push(Mir::NoOp("if_branch end"));
+                self.resolve_target(if_branch_end);
+                
+                for core_hir::If { cond, branch } in else_if_branches {
+                    let cond = self.encode((
+                        cond,
+                        |this: &mut Self| this.temp()
+                    ))?;
+    
+                    self.mir.push(Mir::PreOp {
+                        op: core_mir::PreOpType::Not,
+                        out: cond,
+                        arg: Load::Reg(cond),
+                    });
+
+                    let if_else_branch_end = unsafe {
+                        self.new_target()
+                    };
+
+                    self.mir.push(Mir::BranchTrue {
+                        cond,
+                        target: if_else_branch_end,
+                    });
+
+                    self.encode(branch.val)?;
+                    self.mir.push(Mir::Jump(if_chain_end));
+                    self.mir.push(Mir::NoOp("if else branch end"));
+                    self.resolve_target(if_else_branch_end);
+                }
+
+                if let Some(branch) = else_branch {
+                    self.encode(branch.val)?;
+                }
+
+                self.mir.push(Mir::NoOp("if chain end"));
+                self.resolve_target(if_chain_end);
             }
         }
         
@@ -187,8 +310,9 @@ impl<'idt, 'str, 'hir> Encode<Node<SimpleExpr<'str, 'idt>>> for Encoder<'idt> {
                 use core_hir::Literal;
                 
                 match lit {
-                    Literal::Str(s) => todo!(),
-                    Literal::Float(x) => todo!(),
+                    Literal::Str(s) => todo!("str"),
+                    Literal::Float(x) => todo!("float"),
+                    Literal::Bool(x) => Some(Load::Bool(x)),
                     Literal::Int(x) => {
                         Some(if x < (1 << 8) {
                             Load::U8(x as _)

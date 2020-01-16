@@ -235,6 +235,9 @@ kw_gen! {
     pub => Pub
     mod => Mod
 
+    true => True
+    false => False
+
     print => Print
 
     ---
