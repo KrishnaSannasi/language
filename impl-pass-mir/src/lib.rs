@@ -17,10 +17,18 @@ pub struct MirDigest {
     pub max_reg_count: u64,
 }
 
+struct Loop<'idt> {
+    label: Option<Ident<'idt>>,
+    start: usize,
+    end: usize,
+    exit: usize,
+}
+
 #[derive(Default)]
 struct Encoder<'idt> {
     blocks: Vec<Block>,
     scopes: Vec<Scope<'idt>>,
+    loop_stack: Vec<Loop<'idt>>,
     max_reg_count: u64,
     current_scope: usize,
     current_block: usize,
@@ -156,7 +164,7 @@ where
             Expr::Tuple(lit) => todo!("tuple"),
             Expr::Simple(simple) => {
                 reg = to(self);
-                Mir::Load { to: reg, from: self.encode(simple)? }
+                Mir::LoadReg { to: reg, from: self.encode(simple)? }
             },
             Expr::BinOp(op, left, right) => {
                 use core_hir::Operator;
@@ -214,6 +222,33 @@ impl<'idt, 'str, 'hir> Encode<Node<Hir<'str, 'idt, 'hir>>> for Encoder<'idt> {
         match value.val {
             Hir::Rec(infallible, _) => match infallible {}
             Hir::Scope(inner) => self.encode(inner)?,
+            Hir::Loop(inner) => {
+                let start = self.new_block();
+                let end = self.new_block();
+                let exit = self.new_block();
+                self.loop_stack.push(Loop { label: None, start, end, exit });
+                self.jump(self.current_block, start);
+                self.jump(end, start);
+                self.current_block = start;
+                self.encode(inner)?;
+                self.jump(self.current_block, end);
+                self.loop_stack.pop();
+            }
+            Hir::ControlFlow {
+                ty: core_hir::ControlFlowType::Break, label, val
+            } => {
+                assert!(label.is_none());
+                assert!(val.is_none());
+
+                let &Loop { exit, .. } = self.loop_stack.last().expect("Break can only be used inside a loop");
+
+                self.jump(self.current_block, exit);
+            }
+            Hir::ControlFlow {
+                ty: core_hir::ControlFlowType::Continue, label, val
+            } => {
+                panic!()
+            }
             Hir::Print(id) => {
                 let print = self.get(id).map(Mir::Print)?;
                 self.blocks[self.current_block].mir.push(print);
@@ -255,9 +290,13 @@ impl<'idt, 'str, 'hir> Encode<Node<Hir<'str, 'idt, 'hir>>> for Encoder<'idt> {
                 self.encode((value, |this: &mut Self| to))?;
             }
             Hir::If { if_branch,  else_if_branches, else_branch, } => {
+                let bb_start = self.new_block();
                 let trailing_block = self.new_block();
+                
+                self.jump(self.current_block, bb_start);
+                self.current_block = bb_start;
 
-                let init_block = self.current_block;
+                let init_block = bb_start;
                 
                 let next_branch = std::iter::once(if_branch)
                     .chain(else_if_branches)
@@ -302,12 +341,12 @@ impl<'idt, 'str, 'hir> Encode<Node<Hir<'str, 'idt, 'hir>>> for Encoder<'idt> {
 }
 
 impl<'idt, 'str, 'hir> Encode<Node<SimpleExpr<'str, 'idt>>> for Encoder<'idt> {
-    type Output = Load;
+    type Output = Reg;
 
     fn encode(&mut self, value: Node<SimpleExpr<'str, 'idt>>) -> Option<Self::Output> {
         match value.val {
             SimpleExpr::Ident(ident) => match self.get(ident) {
-                Some(reg) => Some(Load::Reg(reg)),
+                Some(reg) => Some(reg),
                 None => {
                     eprintln!("ERROR: detected an uninitialized variable: {:?} at {:?}", ident, value.span);
                     None
@@ -315,13 +354,15 @@ impl<'idt, 'str, 'hir> Encode<Node<SimpleExpr<'str, 'idt>>> for Encoder<'idt> {
             }
             SimpleExpr::Literal(lit) => {
                 use core_hir::Literal;
+
+                let to = self.temp();
                 
-                match lit {
+                let from = match lit {
                     Literal::Str(s) => todo!("str"),
                     Literal::Float(x) => todo!("float"),
-                    Literal::Bool(x) => Some(Load::Bool(x)),
+                    Literal::Bool(x) => Load::Bool(x),
                     Literal::Int(x) => {
-                        Some(if x < (1 << 8) {
+                        if x < (1 << 8) {
                             Load::U8(x as _)
                         } else if x < (1 << 16) {
                             Load::U16(x as _)
@@ -331,9 +372,14 @@ impl<'idt, 'str, 'hir> Encode<Node<SimpleExpr<'str, 'idt>>> for Encoder<'idt> {
                             Load::U64(x as _)
                         } else {
                             Load::U128(x as _)
-                        })
+                        }
                     },
-                }
+                };
+
+
+                self.blocks[self.current_block].mir.push(Mir::Load { to, from });
+
+                Some(to)
             }
         }
     }    

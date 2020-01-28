@@ -11,6 +11,8 @@ members = [
     'impl-pass-hir',
     'impl-pass-mir',
 
+    'interp-mir',
+
     'lib-arena',
     'lib-thread-local',
     'lib-array-vec',

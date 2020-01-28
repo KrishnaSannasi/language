@@ -13,6 +13,8 @@ impl-lexer = { path = '../impl-lexer' }
 impl-pass-hir = {  path = '../impl-pass-hir' }
 impl-pass-mir = {  path = '../impl-pass-mir' }
 
+interp-mir = { path = '../interp-mir' }
+
 lib-array-vec = { path = '../lib-array-vec' }
 lib-arena = { path = '../lib-arena' }
 lib-thread-local = {  path = '../lib-thread-local' }

@@ -15,28 +15,26 @@ pub enum PreOpType {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Mir {
-    __,
-    NoOp(&'static str),
     Jump(usize),
     BranchTrue { cond: Reg, target: usize },
     Load { to: Reg, from: Load },
+    LoadReg { to: Reg, from: Reg },
     Print(Reg),
     BinOp {
         op: BinOpType,
         out: Reg,
-        left: Load,
-        right: Load,
+        left: Reg,
+        right: Reg,
     },
     PreOp {
         op: PreOpType,
         out: Reg,
-        arg: Load,
+        arg: Reg,
     },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Load {
-    Reg(Reg),
     Bool(bool),
     U8(u8),
     U16(u16),

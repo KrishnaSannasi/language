@@ -37,6 +37,7 @@ fn main() {
         for (i, mir) in block.mir.iter().enumerate() {
             println!("{:3}: {:?}", i, mir);
         }
+        println!()
     }
 
     println!("\nBLOCK DATA");
@@ -49,6 +50,10 @@ fn main() {
             i, block.parents, block.children
         );
     }
+
+    println!("\nPROGRAM OUTPUT:\n");
+
+    interp_mir::interpret(digest);
     
     // while let Some(hir_let) = hir_parser.parse() {
     //     dbg!(hir_let);

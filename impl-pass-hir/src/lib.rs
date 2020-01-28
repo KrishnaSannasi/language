@@ -1,7 +1,7 @@
 use lib_arena::local::LocalUniqueArena;
 use lib_peek::PeekableLexer;
 
-use core_hir::{Hir, Node, Pattern, Expr, SimpleExpr, BindingMode, Literal};
+use core_hir::{Hir, Node, Pattern, Expr, SimpleExpr, BindingMode, Literal, ControlFlowType};
 use core_tokens::{Lexer, kw, sym};
 
 #[derive(Clone, Copy)]
@@ -55,6 +55,8 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
         match token.ty {
             Type::Keyword(kw!(print)) => self.parse_print(),
             Type::Keyword(kw!(let)) => self.parse_let(),
+            Type::Keyword(kw!(loop)) => self.parse_loop(),
+            Type::Keyword(kw!(break)) => self.parse_break(),
             Type::Ident(_) => self.parse_mut(),
             Type::Keyword(kw!(if)) => self.parse_if(),
             Type::Grouping(GroupPos::Start, Grouping::Curly) => {
@@ -141,6 +143,19 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
         })
     }
 
+    pub fn parse_break(&mut self) -> Option<TNode<Self>> {
+        let start = self.lexer.parse_keyword(Some(kw!(break)))?;
+
+        Some(Node {
+            span: start.span,
+            val: Hir::ControlFlow {
+                ty: ControlFlowType::Break,
+                label: None,
+                val: None,
+            }
+        })
+    }
+
     pub fn parse_if(&mut self) -> Option<TNode<Self>> {
         use core_tokens::{Token, Type, GroupPos, Grouping};
 
@@ -190,6 +205,16 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
         Some(Node {
             span: start.span.to(end_span),
             val: Hir::If { if_branch, else_if_branches, else_branch }
+        })
+    }
+
+    pub fn parse_loop(&mut self) -> Option<TNode<Self>> {
+        let start = self.lexer.parse_keyword(Some(kw!(loop)))?;
+        let block = self.parse_scope()?;
+
+        Some(Node {
+            span: start.span.to(block.span),
+            val: Hir::Loop(block.val),
         })
     }
 

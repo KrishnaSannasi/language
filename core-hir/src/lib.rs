@@ -26,7 +26,19 @@ pub enum Hir<'str, 'idt, 'hir> {
     },
     Print(Ident<'idt>),
     Scope(Scope<'str, 'idt, 'hir>),
+    Loop(Scope<'str, 'idt, 'hir>),
     Rec(std::convert::Infallible, &'hir mut Hir<'str, 'idt, 'hir>),
+    ControlFlow {
+        ty: ControlFlowType,
+        label: Option<Ident<'idt>>,
+        val: Option<Expr<'str, 'idt>>,
+    },
+}
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum ControlFlowType {
+    Break,
+    Continue,
 }
 
 #[derive(Debug, PartialEq)]
