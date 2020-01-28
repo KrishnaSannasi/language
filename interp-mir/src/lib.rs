@@ -14,12 +14,12 @@ pub fn interpret(digest: MirDigest) {
         };
         
         match *mir {
-            Mir::Print(Reg(reg)) => println!("{}", mem[reg as usize]),
+            Mir::Print(Reg(reg, _)) => println!("{}", mem[reg as usize]),
             Mir::Jump(target) => current_block = blocks[target].as_ref().unwrap().mir.iter(),
             Mir::BranchTrue { cond, target } => if mem[cond.0 as usize] != 0 {
                 current_block = blocks[target].as_ref().unwrap().mir.iter()
             }
-            Mir::Load { to: Reg(to), from } => match from {
+            Mir::Load { to: Reg(to, _), from } => match from {
                 Load::Bool(x) => mem[to as usize] = x as _,
                 Load::U8(x) => mem[to as usize] = x as _,
                 Load::U16(x) => mem[to as usize] = x as _,
@@ -27,9 +27,9 @@ pub fn interpret(digest: MirDigest) {
                 Load::U64(x) => panic!("cannot load 64-bit literals!"),
                 Load::U128(x) => panic!("cannot load 128-bit literals!"),
             }
-            Mir::LoadReg { to: Reg(to), from: Reg(from) } => 
+            Mir::LoadReg { to: Reg(to, _), from: Reg(from, _) } => 
                 mem[to as usize] = mem[from as usize],
-            Mir::BinOp { op, out: Reg(to), left: Reg(left), right: Reg(right) } => {
+            Mir::BinOp { op, out: Reg(to, _), left: Reg(left, _), right: Reg(right, _) } => {
                 let left = mem[left as usize];
                 let right = mem[right as usize];
 
@@ -47,7 +47,7 @@ pub fn interpret(digest: MirDigest) {
                     BinOpType::GreaterThanOrEqual => (left >= right) as _,
                 };
             }
-            Mir::PreOp { op, out: Reg(to), arg: Reg(arg) } => {
+            Mir::PreOp { op, out: Reg(to, _), arg: Reg(arg, _) } => {
                 let arg = mem[arg as usize];
 
                 mem[to as usize] = match op {

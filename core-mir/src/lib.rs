@@ -1,6 +1,6 @@
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Reg(pub u64);
+pub struct Reg<'tcx>(pub u64, pub Option<&'tcx Type>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BinOpType {
@@ -14,23 +14,34 @@ pub enum PreOpType {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Mir {
+pub enum Mir<'tcx> {
     Jump(usize),
-    BranchTrue { cond: Reg, target: usize },
-    Load { to: Reg, from: Load },
-    LoadReg { to: Reg, from: Reg },
-    Print(Reg),
+    BranchTrue { cond: Reg<'tcx>, target: usize },
+    Load { to: Reg<'tcx>, from: Load },
+    LoadReg { to: Reg<'tcx>, from: Reg<'tcx> },
+    Print(Reg<'tcx>),
     BinOp {
         op: BinOpType,
-        out: Reg,
-        left: Reg,
-        right: Reg,
+        out: Reg<'tcx>,
+        left: Reg<'tcx>,
+        right: Reg<'tcx>,
     },
     PreOp {
         op: PreOpType,
-        out: Reg,
-        arg: Reg,
+        out: Reg<'tcx>,
+        arg: Reg<'tcx>,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Type {
+    Primitive(Primitive),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Primitive {
+    Bool,
+    I32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

@@ -1,7 +1,9 @@
-use lib_arena::local::LocalUniqueArena;
+use lib_arena::{local::LocalUniqueArena, cache::Cache};
 use lib_intern::{Interner, Store};
 
 fn main() {
+    let type_cache = Cache::new();
+    
     let digest = {
         let file = std::env::args().nth(1).unwrap();
         let file = std::fs::read_to_string(file).unwrap();
@@ -22,7 +24,9 @@ fn main() {
         let arena = LocalUniqueArena::new();
         let context = impl_pass_hir::Context { arena: &arena };
         let hir_parser = impl_pass_hir::HirParser::new(lexer, context);
-        impl_pass_mir::encode(hir_parser).expect("hi")
+
+        let context = impl_pass_mir::Context { types: &type_cache };
+        impl_pass_mir::encode(hir_parser, context).expect("hi")
     };
     
     println!("CODE");

@@ -12,5 +12,6 @@ core-hir = {  path = '../core-hir' }
 core-mir = {  path = '../core-mir' }
 
 lib-smallvec = { path = '../lib-smallvec' }
+lib-arena = {  path = '../lib-arena' }
 
 vec-utils = '*'
