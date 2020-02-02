@@ -168,7 +168,10 @@ where
             Expr::PreOp(op, right) => todo!("preop"),
             Expr::PostOp(op, left) => todo!("postop"),
             Expr::Tuple(lit) => todo!("tuple"),
-            Expr::Simple(simple) => self.encode((simple, to)),
+            Expr::Simple(simple) => {
+                let to = to(self);
+                self.encode((simple, to))
+            },
             Expr::BinOp(op, left, right) => {
                 use core_hir::Operator;
                 use core_tokens::sym;
@@ -347,19 +350,18 @@ impl<'tcx, 'idt, 'str, 'hir> Encode<Node<SimpleExpr<'str, 'idt>>> for Encoder<'i
     type Output = Reg;
 
     fn encode(&mut self, value: Node<SimpleExpr<'str, 'idt>>) -> Option<Self::Output> {
-        self.encode((value, |this: &mut Self| this.temp()))
+        let reg = self.temp();
+        self.encode((value, reg))
     }
 }
 
-impl<'tcx, 'idt, 'str, 'hir, F: FnOnce(&mut Self) -> Reg> Encode<(Node<SimpleExpr<'str, 'idt>>, F)> for Encoder<'idt> {
+impl<'tcx, 'idt, 'str, 'hir> Encode<(Node<SimpleExpr<'str, 'idt>>, Reg)> for Encoder<'idt> {
     type Output = Reg;
 
-    fn encode(&mut self, (value, to): (Node<SimpleExpr<'str, 'idt>>, F)) -> Option<Self::Output> {
+    fn encode(&mut self, (value, to): (Node<SimpleExpr<'str, 'idt>>, Reg)) -> Option<Self::Output> {
         match value.val {
             SimpleExpr::Ident(ident) => match self.get(ident) {
                 Some(from) => {
-                    let to = to(self);
-    
                     self.blocks[self.current_block].mir.push(Mir::LoadReg { to, from });
                     Some(to)
                 },
@@ -389,8 +391,6 @@ impl<'tcx, 'idt, 'str, 'hir, F: FnOnce(&mut Self) -> Reg> Encode<(Node<SimpleExp
                         }
                     },
                 };
-
-                let to = to(self);
 
                 self.blocks[self.current_block].mir.push(Mir::Load { to, from });
 
