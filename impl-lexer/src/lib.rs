@@ -42,7 +42,7 @@ impl<'input, 'str, 'idt> Lexer<'input, 'str, 'idt> {
             self.ctx.long_strings.insert(s).into()
         }
     }
-    
+
     fn parse_whitespace(&mut self) -> Option<Span> {
         if let leading_whitespace @ Some(_) = self.leading_whitespace.take() {
             return leading_whitespace;

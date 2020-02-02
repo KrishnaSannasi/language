@@ -8,5 +8,5 @@
     hash_set_entry
 )]
 
-pub mod local;
 pub mod cache;
+pub mod local;

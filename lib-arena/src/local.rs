@@ -20,7 +20,10 @@ impl<T, const N: usize> Default for LocalUniqueArena<T, N> {
 impl<T, const N: usize> LocalUniqueArena<T, N> {
     pub fn new() -> Self {
         assert!(N != 0, "Cannot use empty slabs for an arena");
-        assert!(std::mem::size_of::<T>() != 0, "Cannot use zero-sized types in arenas");
+        assert!(
+            std::mem::size_of::<T>() != 0,
+            "Cannot use zero-sized types in arenas"
+        );
 
         let current = unsafe { alloc(Layout::new::<[T; N]>()) };
 

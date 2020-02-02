@@ -1,9 +1,9 @@
+use std::borrow::Borrow;
+use std::cell::Cell;
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
-use std::cell::Cell;
-use std::mem::MaybeUninit;
-use std::borrow::Borrow;
 use std::marker::PhantomData;
+use std::mem::MaybeUninit;
 
 use parking_lot::RwLock;
 
@@ -21,14 +21,14 @@ impl<T: Hash + Eq> Default for Cache<T> {
 impl<T: Hash + Eq> Cache<T> {
     pub fn new() -> Self {
         Self {
-            data: RwLock::default()
+            data: RwLock::default(),
         }
     }
 
     pub fn get<Q>(&self, value: &T) -> Option<&T>
     where
         T: Borrow<Q>,
-        Q: Hash + Eq
+        Q: Hash + Eq,
     {
         let data = self.data.read();
 
@@ -41,10 +41,10 @@ impl<T: Hash + Eq> Cache<T> {
     #[allow(clippy::mut_from_ref)]
     pub fn insert(&self, value: T) -> &T {
         let mut data = self.data.write();
-        
+
         let mark = Cell::new(true);
         let value = Inserter {
-            item: Cell::new(MaybeUninit::new(value))
+            item: Cell::new(MaybeUninit::new(value)),
         };
 
         let output = data.get_or_insert_with(&value, |value| unsafe {
@@ -52,9 +52,8 @@ impl<T: Hash + Eq> Cache<T> {
             Item {
                 own: PhantomData,
                 ptr: Box::into_raw(Box::new(
-                    value.item.replace(MaybeUninit::uninit())
-                        .assume_init()
-                ))
+                    value.item.replace(MaybeUninit::uninit()).assume_init(),
+                )),
             }
         });
 
@@ -75,22 +74,18 @@ struct Item<T> {
 
 #[repr(transparent)]
 struct Inserter<T> {
-    item: Cell<MaybeUninit<T>>
+    item: Cell<MaybeUninit<T>>,
 }
 
 impl<T> Borrow<Inserter<T>> for Item<T> {
     fn borrow(&self) -> &Inserter<T> {
-        unsafe {
-            &*self.ptr.cast::<Inserter<T>>()
-        }
+        unsafe { &*self.ptr.cast::<Inserter<T>>() }
     }
 }
 
 impl<T> Borrow<T> for Item<T> {
     fn borrow(&self) -> &T {
-        unsafe {
-            &*self.ptr
-        }
+        unsafe { &*self.ptr }
     }
 }
 
@@ -103,7 +98,9 @@ impl<T: PartialEq> PartialEq for Item<T> {
 
 impl<T: Hash> Hash for Item<T> {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
-        unsafe { (*self.ptr).hash(hasher); }
+        unsafe {
+            (*self.ptr).hash(hasher);
+        }
     }
 }
 
@@ -116,7 +113,9 @@ impl<T: PartialEq> PartialEq for Inserter<T> {
 
 impl<T: Hash> Hash for Inserter<T> {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
-        unsafe { (*self.item.as_ptr().cast::<T>()).hash(hasher); }
+        unsafe {
+            (*self.item.as_ptr().cast::<T>()).hash(hasher);
+        }
     }
 }
 
@@ -134,7 +133,7 @@ fn miri() {
 
     let a = c.insert(10);
     let b = c.insert(10);
-    
+
     assert_eq!(c.get(&10), Some(&10));
 
     assert_eq!(a, b);

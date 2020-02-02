@@ -1,4 +1,4 @@
-use core_tokens::{Span, Str, Ident};
+use core_tokens::{Ident, Span, Str};
 
 #[derive(Debug, PartialEq)]
 pub struct Node<N> {
@@ -65,7 +65,11 @@ pub enum Expr<'str, 'idt> {
     Simple(Node<SimpleExpr<'str, 'idt>>),
     PreOp(Operator, Node<SimpleExpr<'str, 'idt>>),
     PostOp(Operator, Node<SimpleExpr<'str, 'idt>>),
-    BinOp(Operator, Node<SimpleExpr<'str, 'idt>>, Node<SimpleExpr<'str, 'idt>>),
+    BinOp(
+        Operator,
+        Node<SimpleExpr<'str, 'idt>>,
+        Node<SimpleExpr<'str, 'idt>>,
+    ),
     Tuple(Vec<Node<Pattern<'str, 'idt>>>),
 }
 

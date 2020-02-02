@@ -1,6 +1,6 @@
 #![feature(try_trait)]
 
-use std::mem::{MaybeUninit, ManuallyDrop};
+use std::mem::{ManuallyDrop, MaybeUninit};
 use std::ptr::NonNull;
 
 use std::ops::Try;
@@ -25,7 +25,7 @@ impl<T> Default for SmallVec<T> {
 
 impl<T> SmallVec<T> {
     const T_SIZE: usize = std::mem::size_of::<T>();
-    
+
     pub fn new() -> Self {
         assert!(std::mem::align_of::<T>() <= std::mem::align_of::<usize>());
 
@@ -55,9 +55,7 @@ impl<T> SmallVec<T> {
         if self.cap <= Self::inline_capacity() {
             self.cap
         } else {
-            unsafe {
-                self.len.assume_init()
-            }
+            unsafe { self.len.assume_init() }
         }
     }
 
@@ -97,17 +95,17 @@ impl<T> SmallVec<T> {
             if self.cap <= Self::inline_capacity() {
                 let len = self.cap;
                 let cap = Self::inline_capacity();
-                
+
                 let ptr = (self as *const Self as *const u8)
                     .add(std::mem::size_of::<usize>())
                     .cast::<T>();
-                
+
                 (ptr, len, cap)
             } else {
                 let len = self.len.assume_init();
                 let cap = self.cap;
                 let ptr = self.ptr.assume_init().as_ptr();
-    
+
                 (ptr, len, cap)
             }
         }
@@ -118,10 +116,10 @@ impl<T> SmallVec<T> {
             let ptr = (self as *mut Self as *mut u8)
                 .add(std::mem::size_of::<usize>())
                 .cast::<T>();
-            
+
             let len = &mut self.cap;
             let cap = Self::inline_capacity();
-            
+
             (ptr, len, cap)
         } else {
             let len = &mut *self.len.as_mut_ptr();
@@ -139,47 +137,42 @@ impl<T> SmallVec<T> {
         let new_cap = len.saturating_add(additional);
 
         if new_cap > cap {
-            unsafe {
-                self.reserve_slow(additional, new_cap)
-            }
+            unsafe { self.reserve_slow(additional, new_cap) }
         }
     }
 
     #[cold]
     unsafe fn reserve_slow(&mut self, additional: usize, new_cap: usize) {
         let (ptr, len, cap) = self.as_parts_mut();
-            let len = *len;
+        let len = *len;
 
-            let mut vec = if cap == Self::inline_capacity() {
-                let mut vec = ManuallyDrop::new(Vec::<T>::with_capacity(new_cap));
+        let mut vec = if cap == Self::inline_capacity() {
+            let mut vec = ManuallyDrop::new(Vec::<T>::with_capacity(new_cap));
 
-                ptr.copy_to_nonoverlapping(
-                        vec.as_mut_ptr(),
-                        len
-                    );
-                
-                vec
-            } else {
-                let mut vec = Vec::from_raw_parts(ptr, len, cap);
+            ptr.copy_to_nonoverlapping(vec.as_mut_ptr(), len);
 
-                vec.reserve(additional);
+            vec
+        } else {
+            let mut vec = Vec::from_raw_parts(ptr, len, cap);
 
-                ManuallyDrop::new(vec)
-            };
+            vec.reserve(additional);
 
-            self.cap = vec.capacity();
-            self.len = MaybeUninit::new(len);
-            self.ptr = MaybeUninit::new(NonNull::new_unchecked(vec.as_mut_ptr()));
+            ManuallyDrop::new(vec)
+        };
+
+        self.cap = vec.capacity();
+        self.len = MaybeUninit::new(len);
+        self.ptr = MaybeUninit::new(NonNull::new_unchecked(vec.as_mut_ptr()));
     }
 
     pub fn push(&mut self, value: T) {
         self.reserve(1);
-        
+
         unsafe {
             let (ptr, len, _) = self.as_parts_mut();
 
             ptr.add(*len).write(value);
-            
+
             *len += 1;
         }
     }
@@ -201,9 +194,7 @@ impl<T> SmallVec<T> {
     pub fn as_slice(&self) -> &[T] {
         let (ptr, len, _) = self.as_parts();
 
-        unsafe {
-            std::slice::from_raw_parts(ptr, len)
-        }
+        unsafe { std::slice::from_raw_parts(ptr, len) }
     }
 
     pub fn as_mut_slice(&mut self) -> &mut [T] {
@@ -246,10 +237,7 @@ impl<T> SmallVec<T> {
 
                 let inline_ptr = self.as_mut_ptr();
 
-                ptr.copy_to_nonoverlapping(
-                    inline_ptr,
-                    len
-                );
+                ptr.copy_to_nonoverlapping(inline_ptr, len);
 
                 Vec::from_raw_parts(ptr, 0, cap);
             } else {
@@ -274,7 +262,7 @@ impl<T> SmallVec<T> {
             let (ptr, len, _) = self.as_parts_mut();
 
             let mut ptr = ptr.add(*len);
-        
+
             for item in slice {
                 ptr.write(item.clone());
 
@@ -292,22 +280,27 @@ impl<T> SmallVec<T> {
 
         unsafe {
             let (ptr, len, _) = self.as_parts_mut();
-            
-            slice.as_ptr()
-                .copy_to_nonoverlapping(
-                    ptr.add(*len),
-                    slice.len()
-                );
+
+            slice
+                .as_ptr()
+                .copy_to_nonoverlapping(ptr.add(*len), slice.len());
 
             *len += slice.len();
         }
     }
 
-    pub fn dedup_by_key<F, K>(&mut self, mut key: F) where F: FnMut(&mut T) -> K, K: PartialEq {
+    pub fn dedup_by_key<F, K>(&mut self, mut key: F)
+    where
+        F: FnMut(&mut T) -> K,
+        K: PartialEq,
+    {
         self.dedup_by(|a, b| key(a) == key(b))
     }
 
-    pub fn dedup_by<F>(&mut self, same_bucket: F) where F: FnMut(&mut T, &mut T) -> bool {
+    pub fn dedup_by<F>(&mut self, same_bucket: F)
+    where
+        F: FnMut(&mut T, &mut T) -> bool,
+    {
         let len = {
             let (dedup, _) = slice_partition_dedup_by(self.as_mut_slice(), same_bucket);
             dedup.len()
@@ -317,37 +310,36 @@ impl<T> SmallVec<T> {
     }
 }
 
-fn slice_partition_dedup_by<T, F>(
-    slice: &mut [T], mut same_bucket: F
-) -> (&mut [T], &mut [T])
-where F: FnMut(&mut T, &mut T) -> bool
+fn slice_partition_dedup_by<T, F>(slice: &mut [T], mut same_bucket: F) -> (&mut [T], &mut [T])
+where
+    F: FnMut(&mut T, &mut T) -> bool,
 {
     let len = slice.len();
-        if len <= 1 {
-            return (slice, &mut [])
-        }
+    if len <= 1 {
+        return (slice, &mut []);
+    }
 
-        let ptr = slice.as_mut_ptr();
-        let mut next_read: usize = 1;
-        let mut next_write: usize = 1;
+    let ptr = slice.as_mut_ptr();
+    let mut next_read: usize = 1;
+    let mut next_write: usize = 1;
 
-        unsafe {
-            // Avoid bounds checks by using raw pointers.
-            while next_read < len {
-                let ptr_read = ptr.add(next_read);
-                let prev_ptr_write = ptr.add(next_write - 1);
-                if !same_bucket(&mut *ptr_read, &mut *prev_ptr_write) {
-                    if next_read != next_write {
-                        let ptr_write = prev_ptr_write.offset(1);
-                        std::mem::swap(&mut *ptr_read, &mut *ptr_write);
-                    }
-                    next_write += 1;
+    unsafe {
+        // Avoid bounds checks by using raw pointers.
+        while next_read < len {
+            let ptr_read = ptr.add(next_read);
+            let prev_ptr_write = ptr.add(next_write - 1);
+            if !same_bucket(&mut *ptr_read, &mut *prev_ptr_write) {
+                if next_read != next_write {
+                    let ptr_write = prev_ptr_write.offset(1);
+                    std::mem::swap(&mut *ptr_read, &mut *ptr_write);
                 }
-                next_read += 1;
+                next_write += 1;
             }
+            next_read += 1;
         }
+    }
 
-        slice.split_at_mut(next_write)
+    slice.split_at_mut(next_write)
 }
 
 impl<T: PartialEq> SmallVec<T> {
@@ -435,7 +427,7 @@ where
 
 impl<A: AsRef<[T]>, T> PartialEq<A> for SmallVec<T>
 where
-    [T]: PartialEq
+    [T]: PartialEq,
 {
     fn eq(&self, other: &A) -> bool {
         self.as_slice() == other.as_ref()
@@ -444,21 +436,18 @@ where
 
 impl<A: AsRef<[T]>, T> PartialOrd<A> for SmallVec<T>
 where
-    [T]: PartialOrd
+    [T]: PartialOrd,
 {
     fn partial_cmp(&self, other: &A) -> Option<std::cmp::Ordering> {
         self.as_slice().partial_cmp(other.as_ref())
     }
 }
 
-impl<T> Eq for SmallVec<T>
-where
-    [T]: Eq
-{}
+impl<T> Eq for SmallVec<T> where [T]: Eq {}
 
 impl<T> Ord for SmallVec<T>
 where
-    [T]: Ord
+    [T]: Ord,
 {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.as_slice().cmp(other.as_slice())
@@ -536,7 +525,7 @@ impl<T> IntoIterator for SmallVec<T> {
     fn into_iter(self) -> Self::IntoIter {
         IntoIter {
             idx: 0,
-            vec: ManuallyDrop::new(self)
+            vec: ManuallyDrop::new(self),
         }
     }
 }
@@ -579,9 +568,7 @@ impl<T> Iterator for IntoIter<T> {
     }
 
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        let (ptr, len, _) = unsafe {
-            self.vec.as_parts_mut()
-        };
+        let (ptr, len, _) = unsafe { self.vec.as_parts_mut() };
 
         let len = *len;
 
@@ -589,10 +576,7 @@ impl<T> Iterator for IntoIter<T> {
 
         if end < len {
             unsafe {
-                std::ptr::drop_in_place(std::slice::from_raw_parts_mut(
-                    ptr.add(self.idx),
-                    n,
-                ));
+                std::ptr::drop_in_place(std::slice::from_raw_parts_mut(ptr.add(self.idx), n));
                 self.idx = end;
                 Some(ptr.add(end).read())
             }
@@ -606,14 +590,14 @@ impl<T> Iterator for IntoIter<T> {
 
         (len, Some(len))
     }
-    
+
     fn try_fold<B, F, R>(&mut self, mut init: B, mut f: F) -> R
     where
         F: FnMut(B, Self::Item) -> R,
         R: Try<Ok = B>,
     {
         let (ptr, len, _) = self.vec.as_parts();
-        
+
         while self.idx < len {
             unsafe {
                 let idx = self.idx;
@@ -659,7 +643,7 @@ fn foo() {
         assert_eq!(Some(()), vec.pop())
     }
     assert_eq!(None, vec.pop());
-    
+
     let mut vec = SmallVec::<u8>::new();
 
     for i in 0..50 {

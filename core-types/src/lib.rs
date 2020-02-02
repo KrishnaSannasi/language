@@ -20,7 +20,7 @@ impl Type {
             _ => false,
         }
     }
-    
+
     pub fn is_inference(&self) -> bool {
         match *self {
             Type::Inf(_) => true,

@@ -1,24 +1,41 @@
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Reg(pub usize);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BinOpType {
-    Add, Sub, Mul, Div,
-    Equal, NotEqual, LessThan, LessThanOrEqual, GreaterThan, GreaterThanOrEqual
+    Add,
+    Sub,
+    Mul,
+    Div,
+    Equal,
+    NotEqual,
+    LessThan,
+    LessThanOrEqual,
+    GreaterThan,
+    GreaterThanOrEqual,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PreOpType {
-    Not, Neg,
+    Not,
+    Neg,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Mir {
     Jump(usize),
-    BranchTrue { cond: Reg, target: usize },
-    Load { to: Reg, from: Load },
-    LoadReg { to: Reg, from: Reg },
+    BranchTrue {
+        cond: Reg,
+        target: usize,
+    },
+    Load {
+        to: Reg,
+        from: Load,
+    },
+    LoadReg {
+        to: Reg,
+        from: Reg,
+    },
     Print(Reg),
     BinOp {
         op: BinOpType,

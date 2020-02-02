@@ -1,8 +1,8 @@
 use lib_arena::local::LocalUniqueArena;
 use lib_peek::PeekableLexer;
 
-use core_hir::{Hir, Node, Pattern, Expr, SimpleExpr, BindingMode, Literal, ControlFlowType};
-use core_tokens::{Lexer, kw, sym};
+use core_hir::{BindingMode, ControlFlowType, Expr, Hir, Literal, Node, Pattern, SimpleExpr};
+use core_tokens::{kw, sym, Lexer};
 
 #[derive(Clone, Copy)]
 pub struct Context<'str, 'idt, 'hir> {
@@ -40,7 +40,10 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> Iterator for HirParser<'str, 'idt, 
 
 impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
     pub fn new(lexer: L, context: Context<'str, 'idt, 'hir>) -> Self {
-        Self { context, lexer: PeekableLexer::new(lexer), }
+        Self {
+            context,
+            lexer: PeekableLexer::new(lexer),
+        }
     }
 
     pub fn alloc(&self, node: TNode<Self>) -> &'hir mut TNode<Self> {
@@ -48,7 +51,7 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
     }
 
     pub fn parse(&mut self) -> Option<TNode<Self>> {
-        use core_tokens::{Type, Grouping, GroupPos};
+        use core_tokens::{GroupPos, Grouping, Type};
 
         let token = self.lexer.peek_token(1).next()?;
 
@@ -66,26 +69,28 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
                     val: Hir::Scope(scope.val),
                     span: scope.span,
                 })
-            },
+            }
             _ => None,
         }
     }
 
     pub fn parse_scope(&mut self) -> Option<Node<core_hir::Scope<'str, 'idt, 'hir>>> {
-        use core_tokens::{Type, Grouping, GroupPos};
+        use core_tokens::{GroupPos, Grouping, Type};
 
         let mut inner = Vec::new();
 
-        let start = self.lexer.parse_grouping(Some((GroupPos::Start, Grouping::Curly)))?;
+        let start = self
+            .lexer
+            .parse_grouping(Some((GroupPos::Start, Grouping::Curly)))?;
         let mut end;
 
         loop {
             let peek = self.lexer.peek_token(1).next()?;
             end = peek.span;
-            
+
             if let Type::Grouping(GroupPos::End, Grouping::Curly) = peek.ty {
                 self.lexer.parse_token();
-                break
+                break;
             } else {
                 inner.push(self.parse()?)
             }
@@ -118,11 +123,12 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
         Some(Node {
             span: start.span.to(end.span),
             val: Hir::Let {
-                value, pat: Node {
+                value,
+                pat: Node {
                     val: Pattern::Ident(ident.ty, BindingMode::Value),
                     span: ident.span,
                 },
-            }
+            },
         })
     }
 
@@ -135,11 +141,12 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
         Some(Node {
             span: ident.span.to(end.span),
             val: Hir::Mut {
-                value, pat: Node {
+                value,
+                pat: Node {
                     val: Pattern::Ident(ident.ty, BindingMode::Value),
                     span: ident.span,
                 },
-            }
+            },
         })
     }
 
@@ -152,12 +159,12 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
                 ty: ControlFlowType::Break,
                 label: None,
                 val: None,
-            }
+            },
         })
     }
 
     pub fn parse_if(&mut self) -> Option<TNode<Self>> {
-        use core_tokens::{Token, Type, GroupPos, Grouping};
+        use core_tokens::{GroupPos, Grouping, Token, Type};
 
         let start = self.lexer.parse_keyword(Some(kw!(if)))?;
         let cond = self.parse_expr()?;
@@ -173,12 +180,16 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
         loop {
             let peek = self.lexer.peek_token(1).next();
 
-            if let Some(Token { ty: Type::Keyword(kw!(else)), .. }) = peek {
+            if let Some(Token {
+                ty: Type::Keyword(kw!(else)),
+                ..
+            }) = peek
+            {
                 self.lexer.parse_keyword(Some(kw!(else)));
             } else {
-                break
+                break;
             };
-            
+
             let peek = self.lexer.peek_token(1).next()?;
 
             match peek.ty {
@@ -189,22 +200,26 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
                     end_span = branch.span;
 
                     else_if_branches.push(core_hir::If { cond, branch });
-                },
+                }
                 Type::Grouping(GroupPos::Start, Grouping::Curly) => {
                     let branch = self.parse_scope()?;
                     end_span = branch.span;
 
                     else_branch = Some(Box::new(branch));
 
-                    break
-                },
-                _ => return None
+                    break;
+                }
+                _ => return None,
             }
         }
 
         Some(Node {
             span: start.span.to(end_span),
-            val: Hir::If { if_branch, else_if_branches, else_branch }
+            val: Hir::If {
+                if_branch,
+                else_if_branches,
+                else_branch,
+            },
         })
     }
 
@@ -230,7 +245,7 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
             if let Some(peek) = peek {
                 if let Type::Symbol(sym) = peek.ty {
                     match sym {
-                        | sym!(+)
+                        sym!(+)
                         | sym!(-)
                         | sym!(*)
                         | sym!(/)
@@ -240,7 +255,7 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
                         | sym!(<=)
                         | sym!(>)
                         | sym!(<) => (),
-                        _ => break 'simple
+                        _ => break 'simple,
                     }
 
                     self.lexer.parse_token();
@@ -249,16 +264,12 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
 
                     return Some(Node {
                         span: expr.span.to(next.span),
-                        val: Expr::BinOp(
-                            core_hir::Operator::Symbol(sym),
-                            expr,
-                            next,
-                        ),
-                    })
+                        val: Expr::BinOp(core_hir::Operator::Symbol(sym), expr, next),
+                    });
                 }
             }
 
-            break
+            break;
         }
 
         Some(Node {
@@ -280,11 +291,11 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
             Type::Float(x) => SimpleExpr::Literal(Literal::Float(x)),
             Type::Keyword(kw!(true)) => SimpleExpr::Literal(Literal::Bool(true)),
             Type::Keyword(kw!(false)) => SimpleExpr::Literal(Literal::Bool(false)),
-            _ => return None
+            _ => return None,
         };
 
         self.lexer.parse_token();
 
-        Some(Node { val, span, })
+        Some(Node { val, span })
     }
 }

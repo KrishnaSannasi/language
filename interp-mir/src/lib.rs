@@ -1,4 +1,4 @@
-use core_mir::{Mir, Load, Reg, BinOpType, PreOpType};
+use core_mir::{BinOpType, Load, Mir, PreOpType, Reg};
 use impl_pass_mir::encode::MirDigest;
 
 pub fn interpret(digest: MirDigest) {
@@ -6,18 +6,20 @@ pub fn interpret(digest: MirDigest) {
 
     let blocks = &digest.blocks;
     let mut current_block = blocks[0].as_ref().unwrap().mir.iter();
-    
+
     loop {
         let mir = match current_block.next() {
             Some(mir) => mir,
             None => return,
         };
-        
+
         match *mir {
             Mir::Print(Reg(reg)) => println!("{}", mem[reg]),
             Mir::Jump(target) => current_block = blocks[target].as_ref().unwrap().mir.iter(),
-            Mir::BranchTrue { ref cond, target } => if mem[cond.0] != 0 {
-                current_block = blocks[target].as_ref().unwrap().mir.iter()
+            Mir::BranchTrue { ref cond, target } => {
+                if mem[cond.0] != 0 {
+                    current_block = blocks[target].as_ref().unwrap().mir.iter()
+                }
             }
             Mir::Load { to: Reg(to), from } => match from {
                 Load::Bool(x) => mem[to] = x as _,
@@ -26,10 +28,17 @@ pub fn interpret(digest: MirDigest) {
                 Load::U32(x) => mem[to] = x as _,
                 Load::U64(_) => panic!("cannot load 64-bit literals!"),
                 Load::U128(_) => panic!("cannot load 128-bit literals!"),
-            }
-            Mir::LoadReg { to: Reg(to), from: Reg(from) } => 
-                mem[to] = mem[from],
-            Mir::BinOp { op, out: Reg(to), left: Reg(left), right: Reg(right) } => {
+            },
+            Mir::LoadReg {
+                to: Reg(to),
+                from: Reg(from),
+            } => mem[to] = mem[from],
+            Mir::BinOp {
+                op,
+                out: Reg(to),
+                left: Reg(left),
+                right: Reg(right),
+            } => {
                 let left = mem[left];
                 let right = mem[right];
 
@@ -38,7 +47,7 @@ pub fn interpret(digest: MirDigest) {
                     BinOpType::Sub => left - right,
                     BinOpType::Mul => left * right,
                     BinOpType::Div => left / right,
-                    
+
                     BinOpType::Equal => (left == right) as _,
                     BinOpType::NotEqual => (left != right) as _,
                     BinOpType::LessThan => (left < right) as _,
@@ -47,7 +56,11 @@ pub fn interpret(digest: MirDigest) {
                     BinOpType::GreaterThanOrEqual => (left >= right) as _,
                 };
             }
-            Mir::PreOp { op, out: Reg(to), arg: Reg(arg) } => {
+            Mir::PreOp {
+                op,
+                out: Reg(to),
+                arg: Reg(arg),
+            } => {
                 let arg = mem[arg];
 
                 mem[to] = match op {

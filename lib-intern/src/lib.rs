@@ -33,7 +33,7 @@ pub type InternStr<'a> = Str<'a, Intern>;
 pub type DataStr<'a> = Str<'a, Data>;
 
 #[derive(Clone, Copy)]
-pub struct Str<'a, T: = Dynamic> {
+pub struct Str<'a, T = Dynamic> {
     ptr: NonNull<()>,
     mark: PhantomData<(&'a StrInner, T)>,
 }
@@ -55,22 +55,26 @@ impl PartialEq<Str<'_, Data>> for Str<'_, Data> {
 impl PartialEq<Str<'_, Dynamic>> for Str<'_, Dynamic> {
     fn eq(&self, other: &Str<'_, Dynamic>) -> bool {
         if self.ptr == other.ptr {
-            return true
+            return true;
         }
-        
+
         let s_ptr = self.ptr.as_ptr() as usize;
         let o_ptr = other.ptr.as_ptr() as usize;
 
         match ((s_ptr & 1) == 0, (o_ptr & 1) == 0) {
             (true, true) => {
-                let s = DataStr { ptr: self.ptr, mark: PhantomData };
-                let o = DataStr { ptr: other.ptr, mark: PhantomData };
+                let s = DataStr {
+                    ptr: self.ptr,
+                    mark: PhantomData,
+                };
+                let o = DataStr {
+                    ptr: other.ptr,
+                    mark: PhantomData,
+                };
 
                 s == o
             }
-            | (false, false)
-            | (false, true)
-            | (true, false) => false
+            (false, false) | (false, true) | (true, false) => false,
         }
     }
 }
@@ -94,7 +98,11 @@ impl Hash for Str<'_, Dynamic> {
         let s_ptr = self.ptr.as_ptr() as usize;
 
         if (s_ptr & 1) == 0 {
-            DataStr { ptr: self.ptr, mark: PhantomData }.hash(hasher)
+            DataStr {
+                ptr: self.ptr,
+                mark: PhantomData,
+            }
+            .hash(hasher)
         } else {
             self.ptr.hash(hasher)
         }
@@ -146,7 +154,10 @@ impl std::borrow::Borrow<str> for OwnStr {
 
 impl<'a> From<Str<'a, Data>> for Str<'a, Dynamic> {
     fn from(s: Str<'a, Data>) -> Self {
-        Self { ptr: s.ptr, mark: PhantomData }
+        Self {
+            ptr: s.ptr,
+            mark: PhantomData,
+        }
     }
 }
 
@@ -154,10 +165,11 @@ impl<'a> From<Str<'a, Intern>> for Str<'a, Dynamic> {
     fn from(s: Str<'a, Intern>) -> Self {
         let ptr = s.ptr.as_ptr() as usize;
         let ptr = ptr | 1;
-        let ptr = unsafe {
-            NonNull::new_unchecked(ptr as *mut ())
-        };
-        Self { ptr, mark: PhantomData }
+        let ptr = unsafe { NonNull::new_unchecked(ptr as *mut ()) };
+        Self {
+            ptr,
+            mark: PhantomData,
+        }
     }
 }
 
@@ -246,9 +258,7 @@ impl Store {
     }
 
     fn insert_inner(&self, s: &str) -> DataStr<'_> {
-        let inner = unsafe {
-            &mut *self.inner.get()
-        };
+        let inner = unsafe { &mut *self.inner.get() };
 
         let own_str = OwnStr::from(s);
 

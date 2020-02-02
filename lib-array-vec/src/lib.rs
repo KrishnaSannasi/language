@@ -146,11 +146,11 @@ impl<const N: usize> SizeInfo<N> {
     const fn len(&self) -> usize {
         let slow = {
             let (len, ovf) = self.end.overflowing_sub(self.start);
-            
+
             let nlen = Self::CAPACITY
                 .wrapping_sub(self.start)
                 .wrapping_add(self.end);
-            
+
             [len, nlen][ovf as usize]
         };
 
@@ -162,7 +162,7 @@ impl<const N: usize> SizeInfo<N> {
     const fn is_empty(&self) -> bool {
         self.start == self.end
     }
-    
+
     pub fn inc(var: &mut usize) {
         Self::add(var, 1)
     }
@@ -176,13 +176,10 @@ impl<T, const N: usize> ArrayDeque<T, N> {
     pub const fn new() -> Self {
         Self {
             data: MaybeUninit::uninit(),
-            size_info: SizeInfo {
-                start: 0,
-                end: 0,
-            },
+            size_info: SizeInfo { start: 0, end: 0 },
         }
     }
-    
+
     fn as_ptr(&self) -> *const T {
         self.data.as_ptr() as *const T
     }
@@ -227,9 +224,7 @@ impl<T, const N: usize> ArrayDeque<T, N> {
     pub fn push_back(&mut self, value: T) {
         assert!(!self.is_full(), "Tried to push into a full queue");
 
-        unsafe {
-            self.push_back_unchecked(value)
-        }
+        unsafe { self.push_back_unchecked(value) }
     }
 
     pub unsafe fn pop_front_unchecked(&mut self) -> T {
@@ -248,18 +243,14 @@ impl<T, const N: usize> ArrayDeque<T, N> {
         if self.is_empty() {
             None
         } else {
-            unsafe {
-                Some(self.pop_front_unchecked())
-            }
+            unsafe { Some(self.pop_front_unchecked()) }
         }
     }
 
     pub fn pop_front(&mut self) -> T {
         assert!(!self.is_empty());
 
-        unsafe {
-            self.pop_front_unchecked()
-        }
+        unsafe { self.pop_front_unchecked() }
     }
 
     pub unsafe fn front_unchecked(&self) -> &T {
@@ -270,14 +261,16 @@ impl<T, const N: usize> ArrayDeque<T, N> {
         if self.is_empty() {
             None
         } else {
-            unsafe {
-                Some(self.front_unchecked())
-            }
+            unsafe { Some(self.front_unchecked()) }
         }
     }
 
     pub fn iter(&self) -> Iter<'_, T, N> {
-        Iter { ptr: self.as_ptr(), size_info: self.size_info, lt: PhantomData }
+        Iter {
+            ptr: self.as_ptr(),
+            size_info: self.size_info,
+            lt: PhantomData,
+        }
     }
 }
 
@@ -286,7 +279,7 @@ use core::marker::PhantomData;
 pub struct Iter<'a, T, const N: usize> {
     ptr: *const T,
     size_info: SizeInfo<N>,
-    lt: PhantomData<&'a Array<T, N>>
+    lt: PhantomData<&'a Array<T, N>>,
 }
 
 impl<'a, T, const N: usize> ExactSizeIterator for Iter<'a, T, N> {}
@@ -333,7 +326,7 @@ impl<'a, T, const N: usize> Iterator for Iter<'a, T, N> {
 pub struct IterMut<'a, T, const N: usize> {
     ptr: *mut T,
     size_info: SizeInfo<N>,
-    lt: PhantomData<&'a mut Array<T, N>>
+    lt: PhantomData<&'a mut Array<T, N>>,
 }
 
 impl<'a, T, const N: usize> ExactSizeIterator for IterMut<'a, T, N> {}
@@ -394,14 +387,11 @@ unsafe impl<#[may_dangle] T, const N: usize> Drop for ArrayDeque<T, N> {
             if let Some(len) = end.checked_sub(start) {
                 core::ptr::drop_in_place(core::slice::from_raw_parts_mut(
                     self.as_mut_ptr().add(start),
-                    len
+                    len,
                 ))
             } else {
                 let ptr = self.as_mut_ptr();
-                core::ptr::drop_in_place(core::slice::from_raw_parts_mut(
-                    ptr,
-                    start,
-                ));
+                core::ptr::drop_in_place(core::slice::from_raw_parts_mut(ptr, start));
 
                 core::ptr::drop_in_place(core::slice::from_raw_parts_mut(
                     ptr.add(end),
@@ -429,7 +419,7 @@ fn foo() {
             assert_eq!(a.len(), len);
         }
     }
-    
+
     let mut a = ArrayDeque::<_, 20>::new();
     let mut v = Vec::new();
 
@@ -450,11 +440,11 @@ fn foo() {
 #[test]
 fn iter() {
     let mut a = ArrayDeque::<_, 15>::new();
-    
+
     for i in 0..15 {
         a.push_back(i)
     }
-    
+
     for _ in 0..5 {
         let i = a.pop_front();
         a.push_back(i);
@@ -467,7 +457,7 @@ fn iter() {
     for i in 0..15 {
         a.push_back(i)
     }
-    
+
     for n in 1..10 {
         dbg!();
         dbg!();

@@ -1,4 +1,4 @@
-pub use lib_intern::{Str, InternStr};
+pub use lib_intern::{InternStr, Str};
 
 pub trait Lexer<'str, 'idt> {
     fn parse_token(&mut self) -> Option<Token<'str, 'idt>>;
