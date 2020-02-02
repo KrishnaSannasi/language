@@ -2,8 +2,6 @@ use lib_arena::{cache::Cache, local::LocalUniqueArena};
 use lib_intern::{Interner, Store};
 
 fn main() {
-    // let type_cache = Cache::new();
-
     let digest = {
         let file = std::env::args().nth(1).unwrap();
         let file = std::fs::read_to_string(file).unwrap();
@@ -25,11 +23,10 @@ fn main() {
         let context = impl_pass_hir::Context { arena: &arena };
         let hir_parser = impl_pass_hir::HirParser::new(lexer, context);
 
-        let context = impl_pass_mir::Context {
-            // types: &type_cache 
-        };
-        impl_pass_mir::encode(hir_parser, context).expect("hi")
+        impl_pass_mir::encode::write(hir_parser).expect("hi")
     };
+
+    let types = impl_pass_mir::type_check::infer_types(&digest).unwrap();
 
     println!("CODE");
 
@@ -63,7 +60,7 @@ fn main() {
 
     println!("\nTYPE INFO");
 
-    for (i, ty) in digest.types.iter().enumerate() {
+    for (i, ty) in types.iter().enumerate() {
         println!("type_of {}: {:?}", i, ty);
     }
 

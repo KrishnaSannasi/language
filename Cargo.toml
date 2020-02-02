@@ -6,6 +6,7 @@ members = [
     'core-tokens',
     'core-hir',
     'core-mir',
+    'core-types',
 
     'impl-lexer',
     'impl-pass-hir',

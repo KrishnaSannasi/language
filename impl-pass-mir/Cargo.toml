@@ -10,6 +10,7 @@ edition = "2018"
 core-tokens = { path = '../core-tokens' }
 core-hir = {  path = '../core-hir' }
 core-mir = {  path = '../core-mir' }
+core-types = {  path = '../core-types' }
 
 lib-smallvec = { path = '../lib-smallvec' }
 lib-arena = {  path = '../lib-arena' }

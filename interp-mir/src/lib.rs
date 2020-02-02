@@ -1,5 +1,5 @@
 use core_mir::{Mir, Load, Reg, BinOpType, PreOpType};
-use impl_pass_mir::MirDigest;
+use impl_pass_mir::encode::MirDigest;
 
 pub fn interpret(digest: MirDigest) {
     let mut mem = vec![0_i64; digest.max_reg_count];
