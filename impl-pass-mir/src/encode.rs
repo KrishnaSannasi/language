@@ -1,5 +1,5 @@
 use core_tokens::Ident;
-use core_hir::{Node, Hir, Pattern, BindingMode, Expr, SimpleExpr};
+use core_hir::{Node, Hir, Pattern, BindingMode, Expr, SimpleExpr, Literal};
 use core_mir::{Mir, Load, Reg};
 
 use std::collections::{HashMap, HashSet};
@@ -202,7 +202,7 @@ where
                 reg = to(self);
 
                 self.blocks[self.current_block].mir.push(
-                    Mir::BinOp { op, out: reg.clone(), left, right }
+                    Mir::BinOp { op, out: reg, left, right }
                 );
                 Some(reg)
             },
@@ -346,20 +346,32 @@ impl<'tcx, 'idt, 'str, 'hir> Encode<Node<Hir<'str, 'idt, 'hir>>> for Encoder<'id
     }
 }
 
-impl<'tcx, 'idt, 'str, 'hir> Encode<Node<SimpleExpr<'str, 'idt>>> for Encoder<'idt> {
+impl<'idt, 'str> Encode<Node<SimpleExpr<'str, 'idt>>> for Encoder<'idt> {
     type Output = Reg;
 
     fn encode(&mut self, value: Node<SimpleExpr<'str, 'idt>>) -> Option<Self::Output> {
-        let reg = self.temp();
-        self.encode((value, reg))
+        match value.val {
+            SimpleExpr::Literal(lit) => {
+                let to = self.temp();
+                self.encode((lit, to))
+            }
+            SimpleExpr::Ident(ident) => match self.get(ident) {
+                Some(from) => Some(from),
+                None => {
+                    eprintln!("ERROR: detected an uninitialized variable: {:?} at {:?}", ident, value.span);
+                    None
+                }
+            }
+        }
     }
 }
 
-impl<'tcx, 'idt, 'str, 'hir> Encode<(Node<SimpleExpr<'str, 'idt>>, Reg)> for Encoder<'idt> {
+impl<'idt, 'str> Encode<(Node<SimpleExpr<'str, 'idt>>, Reg)> for Encoder<'idt> {
     type Output = Reg;
 
     fn encode(&mut self, (value, to): (Node<SimpleExpr<'str, 'idt>>, Reg)) -> Option<Self::Output> {
         match value.val {
+            SimpleExpr::Literal(lit) => self.encode((lit, to)),
             SimpleExpr::Ident(ident) => match self.get(ident) {
                 Some(from) => {
                     self.blocks[self.current_block].mir.push(Mir::LoadReg { to, from });
@@ -370,32 +382,35 @@ impl<'tcx, 'idt, 'str, 'hir> Encode<(Node<SimpleExpr<'str, 'idt>>, Reg)> for Enc
                     None
                 }
             }
-            SimpleExpr::Literal(lit) => {
-                use core_hir::Literal;
-
-                let from = match lit {
-                    Literal::Str(s) => todo!("str"),
-                    Literal::Float(x) => todo!("float"),
-                    Literal::Bool(x) => Load::Bool(x),
-                    Literal::Int(x) => {
-                        if x < (1 << 8) {
-                            Load::U8(x as _)
-                        } else if x < (1 << 16) {
-                            Load::U16(x as _)
-                        } else if x < (1 << 32) {
-                            Load::U32(x as _)
-                        } else if x < (1 << 64) {
-                            Load::U64(x as _)
-                        } else {
-                            Load::U128(x as _)
-                        }
-                    },
-                };
-
-                self.blocks[self.current_block].mir.push(Mir::Load { to, from });
-
-                Some(to)
-            }
         }
+    }
+}
+
+impl<'idt, 'str> Encode<(Literal<'str>, Reg)> for Encoder<'idt> {
+    type Output = Reg;
+
+    fn encode(&mut self, (value, to): (Literal<'str>, Reg)) -> Option<Self::Output> {
+        let from = match value {
+            Literal::Str(s) => todo!("str"),
+            Literal::Float(x) => todo!("float"),
+            Literal::Bool(x) => Load::Bool(x),
+            Literal::Int(x) => {
+                if x < (1 << 8) {
+                    Load::U8(x as _)
+                } else if x < (1 << 16) {
+                    Load::U16(x as _)
+                } else if x < (1 << 32) {
+                    Load::U32(x as _)
+                } else if x < (1 << 64) {
+                    Load::U64(x as _)
+                } else {
+                    Load::U128(x as _)
+                }
+            },
+        };
+
+        self.blocks[self.current_block].mir.push(Mir::Load { to, from });
+
+        Some(to)
     }    
 }

@@ -1,5 +1,5 @@
+use core_mir::{Mir, Reg, Load, BinOpType};
 use core_types::{Type, Primitive};
-use core_mir::{Mir, Reg, Load};
 
 use crate::encode::MirDigest;
 
@@ -22,7 +22,35 @@ pub fn infer_types(mir: &MirDigest) -> Option<Vec<Type>> {
 
                 return None
             }
-        }}
+        }};
+        ($a:ident == $b:ident) => {{
+            let (a, b) = ($a, $b);
+            if a != b {
+                assert!(a < types.len());
+                assert!(b < types.len());
+
+                let (a, b) = unsafe {
+                    let types = types.as_mut_ptr();
+
+                    (&mut *types.add(a), &mut *types.add(b))
+                };
+
+                match (a.is_inference(), b.is_inference()) {
+                    (true, _) => *a = b.clone(),
+                    (_, true) => *b = a.clone(),
+                    (false, false) => if a != b {
+                        eprintln!(
+                            "TypeError ({}), found type: {:?}, expected {:?}",
+                            $a,
+                            b,
+                            a,
+                        );
+        
+                        return None
+                    }
+                }
+            }
+        }};
     };
     
     for block in mir.blocks.iter().flatten() {
@@ -51,9 +79,36 @@ pub fn infer_types(mir: &MirDigest) -> Option<Vec<Type>> {
                     }
                 }
                 Mir::LoadReg { to: Reg(to), from: Reg(from) } => {
-                    write_type!(to <- Type::Inf(from))
+                    write_type!(to == from);
                 }
-                Mir::BinOp { .. } => {}
+                Mir::BinOp {
+                    op,
+                    out: Reg(out),
+                    left: Reg(left),
+                    right: Reg(right),
+                } => match op {
+                    | BinOpType::Add
+                    | BinOpType::Sub
+                    | BinOpType::Mul
+                    | BinOpType::Div => {
+                        write_type!(out <- Type::Primitive(Primitive::I32));
+                        write_type!(left <- Type::Primitive(Primitive::I32));
+                        write_type!(right <- Type::Primitive(Primitive::I32));
+                    }
+                    | BinOpType::LessThan
+                    | BinOpType::GreaterThan
+                    | BinOpType::LessThanOrEqual
+                    | BinOpType::GreaterThanOrEqual => {
+                        write_type!(out <- Type::Primitive(Primitive::Bool));
+                        write_type!(left <- Type::Primitive(Primitive::I32));
+                        write_type!(right <- Type::Primitive(Primitive::I32));
+                    }
+                    | BinOpType::Equal
+                    | BinOpType::NotEqual => {
+                        write_type!(out <- Type::Primitive(Primitive::Bool));
+                        write_type!(left == right);
+                    }
+                }
                 Mir::PreOp { .. } => {}
             }
         }
