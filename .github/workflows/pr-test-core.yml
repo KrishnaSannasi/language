@@ -7,7 +7,7 @@ jobs:
       matrix:
         os: [ubuntu-latest] # [ubuntu-latest, windows-latest, macOS-latest]
         rust: [nightly]
-        features: ["\"\"""] // ["\"\"", "--features \"no_std\"", "--features \"no_std,alloc\"", "--features \"alloc\""] 
+        features: ["\"\""] # ["\"\"", "--features \"no_std\"", "--features \"no_std,alloc\"", "--features \"alloc\""] 
 
     steps:
     - uses: hecrj/setup-rust-action@v1
