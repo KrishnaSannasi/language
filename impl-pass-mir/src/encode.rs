@@ -164,14 +164,11 @@ where
     fn encode(&mut self, (value, to): (Node<Expr<'str, 'idt>>, F)) -> Option<Self::Output> {
         let reg;
 
-        let mir = match value.val {
+        match value.val {
             Expr::PreOp(op, right) => todo!("preop"),
             Expr::PostOp(op, left) => todo!("postop"),
             Expr::Tuple(lit) => todo!("tuple"),
-            Expr::Simple(simple) => {
-                reg = to(self);
-                Mir::LoadReg { to: reg.clone(), from: self.encode(simple)? }
-            },
+            Expr::Simple(simple) => self.encode((simple, to)),
             Expr::BinOp(op, left, right) => {
                 use core_hir::Operator;
                 use core_tokens::sym;
@@ -201,12 +198,12 @@ where
                 
                 reg = to(self);
 
-                Mir::BinOp { op, out: reg.clone(), left, right }
+                self.blocks[self.current_block].mir.push(
+                    Mir::BinOp { op, out: reg.clone(), left, right }
+                );
+                Some(reg)
             },
-        };
-
-        self.blocks[self.current_block].mir.push(mir);
-        Some(reg)
+        }
     }
 }
 
@@ -350,9 +347,22 @@ impl<'tcx, 'idt, 'str, 'hir> Encode<Node<SimpleExpr<'str, 'idt>>> for Encoder<'i
     type Output = Reg;
 
     fn encode(&mut self, value: Node<SimpleExpr<'str, 'idt>>) -> Option<Self::Output> {
+        self.encode((value, |this: &mut Self| this.temp()))
+    }
+}
+
+impl<'tcx, 'idt, 'str, 'hir, F: FnOnce(&mut Self) -> Reg> Encode<(Node<SimpleExpr<'str, 'idt>>, F)> for Encoder<'idt> {
+    type Output = Reg;
+
+    fn encode(&mut self, (value, to): (Node<SimpleExpr<'str, 'idt>>, F)) -> Option<Self::Output> {
         match value.val {
             SimpleExpr::Ident(ident) => match self.get(ident) {
-                Some(reg) => Some(reg),
+                Some(from) => {
+                    let to = to(self);
+    
+                    self.blocks[self.current_block].mir.push(Mir::LoadReg { to, from });
+                    Some(to)
+                },
                 None => {
                     eprintln!("ERROR: detected an uninitialized variable: {:?} at {:?}", ident, value.span);
                     None
@@ -361,8 +371,6 @@ impl<'tcx, 'idt, 'str, 'hir> Encode<Node<SimpleExpr<'str, 'idt>>> for Encoder<'i
             SimpleExpr::Literal(lit) => {
                 use core_hir::Literal;
 
-                let to = self.temp();
-                
                 let from = match lit {
                     Literal::Str(s) => todo!("str"),
                     Literal::Float(x) => todo!("float"),
@@ -382,7 +390,9 @@ impl<'tcx, 'idt, 'str, 'hir> Encode<Node<SimpleExpr<'str, 'idt>>> for Encoder<'i
                     },
                 };
 
-                self.blocks[self.current_block].mir.push(Mir::Load { to: to.clone(), from });
+                let to = to(self);
+
+                self.blocks[self.current_block].mir.push(Mir::Load { to, from });
 
                 Some(to)
             }

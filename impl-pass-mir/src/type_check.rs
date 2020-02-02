@@ -59,5 +59,24 @@ pub fn infer_types(mir: &MirDigest) -> Option<Vec<Type>> {
         }
     }
 
+    loop {
+        let mut has_changed = false;
+
+        for ty in  0..types.len() {
+            if let Type::Inf(other) = types[ty] {
+                if other == ty {
+                    eprintln!("Failed to infer type of {}", ty);
+                }
+    
+                has_changed |= types[ty] != types[other];
+                types[ty] = types[other].clone();
+            }
+        }
+
+        if !has_changed {
+            break
+        }
+    }
+
     Some(types)
 }
