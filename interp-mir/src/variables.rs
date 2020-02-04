@@ -10,7 +10,7 @@ pub struct Variables<'a> {
 }
 
 impl<'a> Variables<'a> {
-    pub fn new(types: &'a [Type]) -> Self {
+    pub fn layout(types: &'a [Type]) -> (Vec<usize>, Layout) {
         let mut assign = vec![0; types.len()];
 
         let count_bool = types.iter()
@@ -47,6 +47,12 @@ impl<'a> Variables<'a> {
             }
         }
 
+        (assign, layout)
+    }
+    
+    pub fn new(types: &'a [Type]) -> Self {
+        let (assign, layout) = Self::layout(types);
+        
         Self {
             types,
             assign,

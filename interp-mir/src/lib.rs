@@ -4,22 +4,18 @@ use impl_pass_mir::encode::MirDigest;
 
 mod stack_frame;
 mod variables;
+mod compile_to_c;
+
+pub use compile_to_c::emit_c;
 
 pub fn interpret(digest: MirDigest) {
     let types = impl_pass_mir::type_check::infer_types(&digest).expect("Could not deduce types");
     let mut vars = variables::Variables::new(&types);
-    
-    // let mut mem = vec![0_i64; digest.max_reg_count];
 
     let blocks = &digest.blocks;
     let mut current_block = blocks[0].as_ref().unwrap().mir.iter();
 
-    loop {
-        let mir = match current_block.next() {
-            Some(mir) => mir,
-            None => return,
-        };
-
+    while let Some(mir) = current_block.next() {
         match *mir {
             Mir::Print(Reg(reg)) => match types[reg] {
                 Type::Primitive(Primitive::Bool) => println!("{}", vars.get::<bool>(reg)),
