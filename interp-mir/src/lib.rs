@@ -1,10 +1,10 @@
 use core_mir::{BinOpType, Load, PreOpType, Reg};
-use core_types::{Type, Primitive};
-use impl_pass_mir::{Mir, Block, StackFrame};
+use core_types::{Primitive, Type};
+use impl_pass_mir::{Block, Mir, StackFrame};
 
+mod compile_to_c;
 mod stack_frame;
 mod variables;
-mod compile_to_c;
 
 pub use compile_to_c::emit_c;
 
@@ -50,54 +50,62 @@ pub fn interpret(digest: StackFrame) {
                     BinOpType::Add => {
                         let out = vars.get::<i32>(left) + vars.get::<i32>(right);
                         vars.set(to, out);
-                    },
+                    }
                     BinOpType::Sub => {
                         let out = vars.get::<i32>(left) - vars.get::<i32>(right);
                         vars.set(to, out);
-                    },
+                    }
                     BinOpType::Mul => {
                         let out = vars.get::<i32>(left) * vars.get::<i32>(right);
                         vars.set(to, out);
-                    },
+                    }
                     BinOpType::Div => {
                         let out = vars.get::<i32>(left) / vars.get::<i32>(right);
                         vars.set(to, out);
-                    },
+                    }
 
                     BinOpType::Equal => {
                         let out = match types[left] {
-                            Type::Primitive(Primitive::Bool) => vars.get::<bool>(left) == vars.get(right),
-                            Type::Primitive(Primitive::I32) => vars.get::<i32>(left) == vars.get(right),
+                            Type::Primitive(Primitive::Bool) => {
+                                vars.get::<bool>(left) == vars.get(right)
+                            }
+                            Type::Primitive(Primitive::I32) => {
+                                vars.get::<i32>(left) == vars.get(right)
+                            }
                             Type::Inf(_) => unreachable!(),
                         };
 
                         vars.set(to, out);
-                    },
+                    }
                     BinOpType::NotEqual => {
                         let out = match types[left] {
-                            Type::Primitive(Primitive::Bool) => vars.get::<bool>(left) != vars.get(right),
-                            Type::Primitive(Primitive::I32) => vars.get::<i32>(left) != vars.get(right),
+                            Type::Primitive(Primitive::Bool) => {
+                                vars.get::<bool>(left) != vars.get(right)
+                            }
+                            Type::Primitive(Primitive::I32) => {
+                                vars.get::<i32>(left) != vars.get(right)
+                            }
                             Type::Inf(_) => unreachable!(),
                         };
 
                         vars.set(to, out);
-                    },
+                    }
                     BinOpType::LessThan => {
                         let out = vars.get::<i32>(left) < vars.get(right);
                         vars.set(to, out);
-                    },
+                    }
                     BinOpType::GreaterThan => {
                         let out = vars.get::<i32>(left) > vars.get(right);
                         vars.set(to, out);
-                    },
+                    }
                     BinOpType::LessThanOrEqual => {
                         let out = vars.get::<i32>(left) <= vars.get(right);
                         vars.set(to, out);
-                    },
+                    }
                     BinOpType::GreaterThanOrEqual => {
                         let out = vars.get::<i32>(left) >= vars.get(right);
                         vars.set(to, out);
-                    },
+                    }
                 };
             }
             Mir::PreOp {
@@ -113,9 +121,7 @@ pub fn interpret(digest: StackFrame) {
                 //     PreOpType::Neg => -arg,
                 // };
             }
-            Mir::Func { ref stack_frame } => {
-                todo!("interp func")
-            }
+            Mir::Func { ref stack_frame } => todo!("interp func"),
         }
     }
 }

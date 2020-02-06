@@ -1,6 +1,6 @@
 use core_mir::{BinOpType, Load, PreOpType, Reg};
-use core_types::{Type, Primitive};
-use impl_pass_mir::{Mir, Block, StackFrame};
+use core_types::{Primitive, Type};
+use impl_pass_mir::{Block, Mir, StackFrame};
 use std::io::{self, Write};
 
 use crate::variables;
@@ -28,10 +28,12 @@ fn write_c(digest: StackFrame, writer: &mut dyn Write) -> io::Result<()> {
         }
     }
 
-    emit!("\
+    emit!(
+        "\
     #include <stdio.h>\n\
     #include <stdint.h>\n\
-    int main() {{\n");
+    int main() {{\n"
+    );
 
     let types = impl_pass_mir::type_check::infer_types(&digest).expect("Could not deduce types");
     let (assign, layout) = variables::Variables::layout(&types);
@@ -43,10 +45,14 @@ fn write_c(digest: StackFrame, writer: &mut dyn Write) -> io::Result<()> {
                 reg: $reg,
                 ty: &$ty as _,
             }
-        }
+        };
     }
 
-    emit!("char locals[{size}] __attribute__((aligned({align})));\n", size=layout.size(), align=layout.align());
+    emit!(
+        "char locals[{size}] __attribute__((aligned({align})));\n",
+        size = layout.size(),
+        align = layout.align()
+    );
 
     for (block_idx, block) in digest.blocks().iter().enumerate() {
         emit!("\n_label_{}:\n", block_idx);
@@ -56,20 +62,24 @@ fn write_c(digest: StackFrame, writer: &mut dyn Write) -> io::Result<()> {
                     emit!("goto _label_{};\n", j);
                 }
                 Mir::BranchTrue { cond, target } => {
-                    emit!("if( {} != 0 ) goto _label_{};\n", get!(cond, "char"),  target);
+                    emit!(
+                        "if( {} != 0 ) goto _label_{};\n",
+                        get!(cond, "char"),
+                        target
+                    );
                 }
                 Mir::Load { from, to } => {
                     let ty = match types[to.0] {
                         Type::Primitive(Primitive::Bool) => "char",
                         Type::Primitive(Primitive::I32) => "int32_t",
-                        _ => unreachable!()
+                        _ => unreachable!(),
                     };
 
-                    let value=  match from {
+                    let value = match from {
                         Load::Bool(x) => x as i32,
                         Load::U8(x) => x as i32,
                         Load::U16(x) => x as i32,
-                        _ => unreachable!()
+                        _ => unreachable!(),
                     };
 
                     emit!("{} = {};\n", get!(to, ty), value);
@@ -78,89 +88,108 @@ fn write_c(digest: StackFrame, writer: &mut dyn Write) -> io::Result<()> {
                     let ty = match types[to.0] {
                         Type::Primitive(Primitive::Bool) => "char",
                         Type::Primitive(Primitive::I32) => "int32_t",
-                        _ => unreachable!()
+                        _ => unreachable!(),
                     };
-                    
+
                     emit!("{} = {};\n", get!(to, ty), get!(from, ty));
                 }
                 Mir::Print(reg) => {
                     let (fmt_spec, ty) = match types[reg.0] {
                         Type::Primitive(Primitive::Bool) => ("b", "char"),
                         Type::Primitive(Primitive::I32) => ("d", "int32_t"),
-                        _ => unreachable!()
+                        _ => unreachable!(),
                     };
-                    
+
                     emit!("printf(\"%{}\\n\", {});\n", fmt_spec, get!(reg, ty));
                 }
-                Mir::BinOp { op, out, left, right } => {
-                    match op {
-                        BinOpType::Add => emit!(
-                            "{} = {} + {};\n",
-                            get!(out, "int32_t"), get!(left, "int32_t"), get!(right, "int32_t")
-                        ),
-                        BinOpType::Sub => emit!(
-                            "{} = {} - {};\n",
-                            get!(out, "int32_t"), get!(left, "int32_t"), get!(right, "int32_t")
-                        ),
-                        BinOpType::Mul => emit!(
-                            "{} = {} * {};\n",
-                            get!(out, "int32_t"), get!(left, "int32_t"), get!(right, "int32_t")
-                        ),
-                        BinOpType::Div => emit!(
-                            "{} = {} / {};\n",
-                            get!(out, "int32_t"), get!(left, "int32_t"), get!(right, "int32_t")
-                        ),
-                        
-                        BinOpType::GreaterThan => emit!(
-                            "{} = {} > {};\n",
-                            get!(out, "int32_t"), get!(left, "int32_t"), get!(right, "int32_t")
-                        ),
-                        BinOpType::LessThan => emit!(
-                            "{} = {} < {};\n",
-                            get!(out, "int32_t"), get!(left, "int32_t"), get!(right, "int32_t")
-                        ),
-                        BinOpType::GreaterThanOrEqual => emit!(
-                            "{} = {} >= {};\n",
-                            get!(out, "int32_t"), get!(left, "int32_t"), get!(right, "int32_t")
-                        ),
-                        BinOpType::LessThanOrEqual => emit!(
-                            "{} = {} <= {};\n",
-                            get!(out, "int32_t"), get!(left, "int32_t"), get!(right, "int32_t")
-                        ),
-                        
-                        BinOpType::Equal => {
-                            let ty = match types[left.0] {
-                                Type::Primitive(Primitive::Bool) => "char",
-                                Type::Primitive(Primitive::I32) => "int32_t",
-                                _ => unreachable!()
-                            };
-                            
-                            emit!(
-                                "{} = {} == {};\n",
-                                get!(out, "char"), get!(left, ty), get!(right, ty),
-                            )
-                        }
-                        
-                        BinOpType::NotEqual => {
-                            let ty = match types[left.0] {
-                                Type::Primitive(Primitive::Bool) => "char",
-                                Type::Primitive(Primitive::I32) => "int32_t",
-                                _ => unreachable!()
-                            };
-                            
-                            emit!(
-                                "{} = {} != {};\n",
-                                get!(out, "char"), get!(left, ty), get!(right, ty),
-                            )
-                        }
+                Mir::BinOp {
+                    op,
+                    out,
+                    left,
+                    right,
+                } => match op {
+                    BinOpType::Add => emit!(
+                        "{} = {} + {};\n",
+                        get!(out, "int32_t"),
+                        get!(left, "int32_t"),
+                        get!(right, "int32_t")
+                    ),
+                    BinOpType::Sub => emit!(
+                        "{} = {} - {};\n",
+                        get!(out, "int32_t"),
+                        get!(left, "int32_t"),
+                        get!(right, "int32_t")
+                    ),
+                    BinOpType::Mul => emit!(
+                        "{} = {} * {};\n",
+                        get!(out, "int32_t"),
+                        get!(left, "int32_t"),
+                        get!(right, "int32_t")
+                    ),
+                    BinOpType::Div => emit!(
+                        "{} = {} / {};\n",
+                        get!(out, "int32_t"),
+                        get!(left, "int32_t"),
+                        get!(right, "int32_t")
+                    ),
+
+                    BinOpType::GreaterThan => emit!(
+                        "{} = {} > {};\n",
+                        get!(out, "int32_t"),
+                        get!(left, "int32_t"),
+                        get!(right, "int32_t")
+                    ),
+                    BinOpType::LessThan => emit!(
+                        "{} = {} < {};\n",
+                        get!(out, "int32_t"),
+                        get!(left, "int32_t"),
+                        get!(right, "int32_t")
+                    ),
+                    BinOpType::GreaterThanOrEqual => emit!(
+                        "{} = {} >= {};\n",
+                        get!(out, "int32_t"),
+                        get!(left, "int32_t"),
+                        get!(right, "int32_t")
+                    ),
+                    BinOpType::LessThanOrEqual => emit!(
+                        "{} = {} <= {};\n",
+                        get!(out, "int32_t"),
+                        get!(left, "int32_t"),
+                        get!(right, "int32_t")
+                    ),
+
+                    BinOpType::Equal => {
+                        let ty = match types[left.0] {
+                            Type::Primitive(Primitive::Bool) => "char",
+                            Type::Primitive(Primitive::I32) => "int32_t",
+                            _ => unreachable!(),
+                        };
+
+                        emit!(
+                            "{} = {} == {};\n",
+                            get!(out, "char"),
+                            get!(left, ty),
+                            get!(right, ty),
+                        )
                     }
-                }
-                Mir::PreOp { op, out, arg } => {
-                    todo!("encode c preop")
-                }
-                Mir::Func { ref stack_frame } => {
-                    todo!("encode c func")
-                }
+
+                    BinOpType::NotEqual => {
+                        let ty = match types[left.0] {
+                            Type::Primitive(Primitive::Bool) => "char",
+                            Type::Primitive(Primitive::I32) => "int32_t",
+                            _ => unreachable!(),
+                        };
+
+                        emit!(
+                            "{} = {} != {};\n",
+                            get!(out, "char"),
+                            get!(left, ty),
+                            get!(right, ty),
+                        )
+                    }
+                },
+                Mir::PreOp { op, out, arg } => todo!("encode c preop"),
+                Mir::Func { ref stack_frame } => todo!("encode c func"),
             }
         }
 

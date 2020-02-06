@@ -240,12 +240,12 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
         let param = self.lexer.parse_ident()?;
         self.lexer.parse_sym(Some(sym!(->)))?;
         let body = self.parse()?;
-        
+
         Some(Node {
             span: param.span.to(body.span),
             val: Expr::Func {
                 param: param.ty,
-                body: self.context.arena.alloc(body)
+                body: self.context.arena.alloc(body),
             },
         })
     }
@@ -263,10 +263,15 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
     pub fn parse_expr(&mut self) -> Option<TExpr<Self>> {
         use core_tokens::Type;
 
-        if let Some([
-            core_tokens::TokenValue { ty: Type::Ident(_), .. },
-            core_tokens::TokenValue { ty: Type::Symbol(sym!(->)), .. },
-        ]) = self.peek_2() {
+        if let Some(
+            [core_tokens::TokenValue {
+                ty: Type::Ident(_), ..
+            }, core_tokens::TokenValue {
+                ty: Type::Symbol(sym!(->)),
+                ..
+            }],
+        ) = self.peek_2()
+        {
             return self.parse_function();
         }
 

@@ -37,15 +37,13 @@ pub struct StackFrame<BMeta, FMeta> {
 
 impl<BMeta, FMeta> StackFrame<BMeta, FMeta> {
     pub fn new(blocks: Vec<Block<BMeta, FMeta>>, meta: FMeta) -> Option<Self> {
-
         for block in &blocks {
             for mir in &block.instructions {
                 match mir {
-                    | &Mir::BranchTrue { target, .. }
-                    | &Mir::Jump(target) => {
+                    &Mir::BranchTrue { target, .. } | &Mir::Jump(target) => {
                         if target >= blocks.len() {
                             eprintln!("target is out of bounds!");
-                            return None
+                            return None;
                         }
                     }
                     _ => (),
@@ -89,8 +87,8 @@ pub enum Mir<BMeta, FMeta> {
         arg: Reg,
     },
     Func {
-        stack_frame: StackFrame<BMeta, FMeta>
-    }
+        stack_frame: StackFrame<BMeta, FMeta>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

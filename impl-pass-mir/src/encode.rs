@@ -49,7 +49,7 @@ pub fn write<
         meta: BlockMeta {
             parents: HashSet::new(),
             children: HashSet::new(),
-        }
+        },
     });
 
     encoder.scopes.push(Scope::default());
@@ -60,7 +60,7 @@ pub fn write<
         encoder.blocks,
         FrameMeta {
             max_reg_count: encoder.max_reg_count,
-        }
+        },
     )
 }
 
@@ -132,7 +132,7 @@ impl<'tcx, 'idt, 'str, 'hir> Encoder<'idt> {
             meta: BlockMeta {
                 parents: HashSet::new(),
                 children: HashSet::new(),
-            }
+            },
         });
 
         target
@@ -184,9 +184,7 @@ where
                 let to = to(self);
                 self.encode((simple, to))
             }
-            Expr::Func { param, body } => {
-                todo!("func")
-            }
+            Expr::Func { param, body } => todo!("func"),
             Expr::BinOp(op, left, right) => {
                 use core_hir::Operator;
                 use core_mir::BinOpType;
@@ -216,12 +214,14 @@ where
 
                 reg = to(self);
 
-                self.blocks[self.current_block].instructions.push(Mir::BinOp {
-                    op,
-                    out: reg,
-                    left,
-                    right,
-                });
+                self.blocks[self.current_block]
+                    .instructions
+                    .push(Mir::BinOp {
+                        op,
+                        out: reg,
+                        left,
+                        right,
+                    });
                 Some(reg)
             }
         }

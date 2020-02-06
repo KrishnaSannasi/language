@@ -5,7 +5,7 @@ fn main() -> std::io::Result<()> {
     let _ = std::fs::create_dir("target_c");
     let _ = std::fs::create_dir("target_c/fragments");
     let _ = std::fs::create_dir("target_c/fragment_objects");
-    
+
     let digest = {
         let file = std::env::args().nth(1).unwrap();
         let file = std::fs::read_to_string(file).unwrap();
@@ -34,10 +34,7 @@ fn main() -> std::io::Result<()> {
 
     println!("CODE");
 
-    let blocks = digest
-        .blocks()
-        .iter()
-        .enumerate();
+    let blocks = digest.blocks().iter().enumerate();
 
     for (i, block) in blocks.clone() {
         println!("BLOCK({:3})", i);
@@ -81,7 +78,7 @@ fn main() -> std::io::Result<()> {
         .arg("-O3")
         .stdout(std::process::Stdio::piped())
         .output()?;
-    
+
     let out = std::process::Command::new("gcc")
         .arg("target_c/fragment_objects/test.o")
         .arg("-o")
@@ -93,7 +90,7 @@ fn main() -> std::io::Result<()> {
     //     .stdout(std::process::Stdio::piped())
     //     .stderr(std::process::Stdio::piped())
     //     .output()?;
-    
+
     // while let Some(hir_let) = hir_parser.parse() {
     //     dbg!(hir_let);
     // }

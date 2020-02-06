@@ -4,7 +4,9 @@ use core_types::{Primitive, Type};
 use super::*;
 
 pub fn infer_types(frame: &StackFrame) -> Option<Vec<Type>> {
-    let mut types = (0..frame.meta.max_reg_count).map(Type::Inf).collect::<Vec<_>>();
+    let mut types = (0..frame.meta.max_reg_count)
+        .map(Type::Inf)
+        .collect::<Vec<_>>();
 
     macro_rules! write_type {
         ($reg:ident <- $ty:expr) => {{
@@ -106,7 +108,7 @@ pub fn infer_types(frame: &StackFrame) -> Option<Vec<Type>> {
                     }
                 },
                 Mir::PreOp { .. } => {}
-                Mir::Func { ref stack_frame } => {},
+                Mir::Func { ref stack_frame } => {}
             }
         }
     }
