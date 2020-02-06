@@ -64,8 +64,6 @@ pub fn infer_types<'tcx, 'idt>(mir: &MirDigest, ctx: Context<'idt, 'tcx>) -> Opt
         }
     }
 
-    
-
     macro_rules! write_type {
         ($reg:ident <- $ty:expr) => {{
             let rty = &mut types[$reg];

@@ -14,10 +14,13 @@ pub struct Variables<'a, 'idt, 'tcx> {
 impl<'a, 'idt, 'tcx> Variables<'a, 'idt, 'tcx> {
     pub fn layout(types: &'a [Ty<'idt, 'tcx>]) -> (Vec<usize>, Layout) {
         let mut assign = vec![0; types.len()];
-
-        let mut sorted_types = types.to_vec();
+        let mut types = types.to_vec();
         
-        sorted_types.sort_unstable_by(|a, b| {
+        // sort by alignemnt, then by size in decreasing order of both
+        // This is a simple hueristic that will give the optimal
+        // packing when `align <= size` and `size % align == 0`
+        // in other cases there may be holes up to size `max_align - 1`
+        types.sort_unstable_by(|a, b| {
             a.align().cmp(&b.align())
                 .then(a.size.cmp(&b.size))
                 .reverse()
@@ -26,15 +29,20 @@ impl<'a, 'idt, 'tcx> Variables<'a, 'idt, 'tcx> {
         let mut map = HashMap::new();
 
         for (i, &ty) in types.iter().enumerate() {
+            // the order or variable assignments doesn't matter in general
+            // but it is easier to test things using a stable output, 
+            // so BTreeSet is prefered for testing and `HashSet` is prefered
+            // for performace, this difference may matter for a large number of variables
             map.entry(ty)
-                .or_insert_with(HashSet::new)
+                .or_insert_with(BTreeSet::new)
+                // .or_insert_with(HashSet::new)
                 .insert(i);
         }
 
         let mut size = 0;
         let mut align = 1;
         
-        for ty in sorted_types {
+        for ty in types {
             if let Some(items) = map.remove(ty) {
                 align = align.max(ty.align());
                 let mask = ty.align() - 1;
