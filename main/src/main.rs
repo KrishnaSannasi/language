@@ -82,7 +82,7 @@ fn main() -> std::io::Result<()> {
         .stdout(std::process::Stdio::piped())
         .spawn()?
         .wait()?;
-    
+
     std::process::Command::new("gcc")
         .arg("target_c/fragment_objects/test.o")
         .arg("-o")
@@ -90,13 +90,13 @@ fn main() -> std::io::Result<()> {
         .stdout(std::process::Stdio::piped())
         .spawn()?
         .wait()?;
-        
+
     std::process::Command::new("./target_c/test.exe")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped())
         .spawn()?
         .wait()?;
-    
+
     // while let Some(hir_let) = hir_parser.parse() {
     //     dbg!(hir_let);
     // }

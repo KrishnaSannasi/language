@@ -12,7 +12,7 @@ impl StackFrame {
         unsafe {
             Self {
                 frame: alloc(layout),
-                layout
+                layout,
             }
         }
     }
