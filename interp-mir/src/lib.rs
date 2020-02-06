@@ -4,11 +4,12 @@ use core_types::{Primitive, Type};
 use impl_pass_mir::encode::MirDigest;
 
 mod compile_to_c;
+pub use compile_to_c::emit_c;
+
 #[cfg(FALSE)]
 mod stack_frame;
+#[cfg(FALSE)]
 mod variables;
-
-pub use compile_to_c::emit_c;
 
 #[cfg(FALSE)]
 pub fn interpret(digest: MirDigest) {

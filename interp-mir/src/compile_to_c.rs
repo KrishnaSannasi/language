@@ -93,6 +93,7 @@ fn write_c<'idt>(digest: MirDigest, writer: &mut dyn Write, ident: &'idt lib_int
         "\
     #include <stdio.h>\n\
     #include <stdint.h>\n\
+    #include <string.h>\n\
     int main() {{\n"
     );
 
@@ -136,7 +137,7 @@ fn write_c<'idt>(digest: MirDigest, writer: &mut dyn Write, ident: &'idt lib_int
                 }
                 Mir::BranchTrue { cond, target } => {
                     emit!(
-                        "if( {} != 0 ) goto _label_{};\n",
+                        "if( {} ) goto _label_{};\n",
                         get!(cond, "_Bool"),
                         target
                     );
@@ -159,14 +160,8 @@ fn write_c<'idt>(digest: MirDigest, writer: &mut dyn Write, ident: &'idt lib_int
                 }
                 Mir::LoadReg { from, to } => {
                     let ty = &types[to.0];
-                    let ty = match ty.ty {
-                        Variant::Primitive(Primitive::Bool) => "_Bool",
-                        Variant::Primitive(Primitive::I32) => "int32_t",
-                        _ if ty.size == 0 => continue,
-                        _ => unreachable!(),
-                    };
-
-                    emit!("{} = {};\n", get!(to, ty), get!(from, ty));
+                    assert_eq!(ty, &types[from.0], "type check failure");
+                    emit!("memcpy(locals + {}, locals + {}, {});\n", assign[to.0], assign[from.0], ty.size);
                 }
                 Mir::Print(reg) => {
                     let (fmt_spec, ty) = match types[reg.0].ty {
