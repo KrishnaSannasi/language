@@ -12,62 +12,17 @@ pub struct Variables<'a, 'idt, 'tcx> {
 }
 
 impl<'a, 'idt, 'tcx> Variables<'a, 'idt, 'tcx> {
-    pub fn layout(types: &'a [Ty<'idt, 'tcx>]) -> (Vec<usize>, Layout) {
-        let mut assign = vec![0; types.len()];
-        let mut types = types.to_vec();
-        
-        // sort by alignemnt, then by size in decreasing order of both
-        // This is a simple hueristic that will give the optimal
-        // packing when `align <= size` and `size % align == 0`
-        // in other cases there may be holes up to size `max_align - 1`
-        types.sort_unstable_by(|a, b| {
-            a.align().cmp(&b.align())
-                .then(a.size.cmp(&b.size))
-                .reverse()
-        });
+    
 
-        let mut map = HashMap::new();
+    // pub fn new(types: &'a [Ty<'idt, 'tcx>]) -> Self {
+    //     let (assign, layout) = Self::layout(types);
 
-        for (i, &ty) in types.iter().enumerate() {
-            // the order or variable assignments doesn't matter in general
-            // but it is easier to test things using a stable output, 
-            // so BTreeSet is prefered for testing and `HashSet` is prefered
-            // for performace, this difference may matter for a large number of variables
-            map.entry(ty)
-                .or_insert_with(BTreeSet::new)
-                // .or_insert_with(HashSet::new)
-                .insert(i);
-        }
-
-        let mut size = 0;
-        let mut align = 1;
-        
-        for ty in types {
-            if let Some(items) = map.remove(ty) {
-                align = align.max(ty.align());
-                let mask = ty.align() - 1;
-
-                for pos in items {
-                    // fix alignment
-                    size = (size + mask) & !mask;
-                    assign[pos] = size;
-                    size += ty.size;
-                }
-            }
-        }
-
-        (assign, Layout::from_size_align(size, align).unwrap())
-    }
-
-    pub fn new(types: &'a [Ty<'idt, 'tcx>]) -> Self {
-        let (assign, layout) = Self::layout(types);
-
-        Self {
-            types,
-            assign,
-            // frame: StackFrame::new(layout),
-        }
-    }
+    //     Self {
+    //         types,
+    //         assign,
+    //         // frame: StackFrame::new(layout),
+    //     }
+    // }
 
     // pub fn get<T>(&self, reg: usize) -> T
     // where
