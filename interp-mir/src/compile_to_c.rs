@@ -1,12 +1,12 @@
 use core_mir::{BinOpType, Load, Mir, PreOpType, Reg};
-use core_types::{Primitive, Type};
+use core_types::{Ty, Type, Variant, Primitive};
 use impl_pass_mir::encode::MirDigest;
 use std::io::{self, Write};
 
 use crate::variables;
 
-pub fn emit_c(digest: MirDigest, mut writer: impl Write) -> io::Result<()> {
-    write_c(digest, &mut writer)
+pub fn emit_c(digest: MirDigest, mut writer: impl Write, ident: &lib_intern::Interner) -> io::Result<()> {
+    write_c(digest, &mut writer, ident)
 }
 
 struct GetLocal<'a, 'b> {
@@ -21,7 +21,7 @@ impl std::fmt::Display for GetLocal<'_, '_> {
     }
 }
 
-fn write_c(digest: MirDigest, writer: &mut dyn Write) -> io::Result<()> {
+fn write_c<'idt>(digest: MirDigest, writer: &mut dyn Write, ident: &'idt lib_intern::Interner) -> io::Result<()> {
     macro_rules! emit {
         ($($t:tt)*) => {
             write!(writer, $($t)*)?;
@@ -35,7 +35,14 @@ fn write_c(digest: MirDigest, writer: &mut dyn Write) -> io::Result<()> {
     int main() {{\n"
     );
 
-    let types = impl_pass_mir::type_check::infer_types(&digest).expect("Could not deduce types");
+    let ty_ctx = lib_arena::cache::Cache::new();
+    let types = impl_pass_mir::type_check::infer_types(
+        &digest,
+        impl_pass_mir::type_check::Context {
+            ident,
+            ty: &ty_ctx,
+        }
+    ).expect("Could not deduce types");
     let (assign, layout) = variables::Variables::layout(&types);
 
     macro_rules! get {
@@ -69,39 +76,41 @@ fn write_c(digest: MirDigest, writer: &mut dyn Write) -> io::Result<()> {
                 Mir::BranchTrue { cond, target } => {
                     emit!(
                         "if( {} != 0 ) goto _label_{};\n",
-                        get!(cond, "char"),
+                        get!(cond, "_Bool"),
                         target
                     );
                 }
                 Mir::Load { from, to } => {
-                    let ty = match types[to.0] {
-                        Type::Primitive(Primitive::Bool) => "char",
-                        Type::Primitive(Primitive::I32) => "int32_t",
+                    let ty = match types[to.0].ty {
+                        Variant::Primitive(Primitive::Bool) => "_Bool",
+                        Variant::Primitive(Primitive::I32) => "int32_t",
                         _ => unreachable!(),
                     };
 
                     let value = match from {
-                        Load::Bool(x) => x as i32,
-                        Load::U8(x) => x as i32,
-                        Load::U16(x) => x as i32,
+                        Load::Bool(x) => i32::from(x),
+                        Load::U8(x) => i32::from(x),
+                        Load::U16(x) => i32::from(x),
                         _ => unreachable!(),
                     };
 
                     emit!("{} = {};\n", get!(to, ty), value);
                 }
                 Mir::LoadReg { from, to } => {
-                    let ty = match types[to.0] {
-                        Type::Primitive(Primitive::Bool) => "char",
-                        Type::Primitive(Primitive::I32) => "int32_t",
+                    let ty = &types[to.0];
+                    let ty = match ty.ty {
+                        Variant::Primitive(Primitive::Bool) => "_Bool",
+                        Variant::Primitive(Primitive::I32) => "int32_t",
+                        _ if ty.size == 0 => continue,
                         _ => unreachable!(),
                     };
 
                     emit!("{} = {};\n", get!(to, ty), get!(from, ty));
                 }
                 Mir::Print(reg) => {
-                    let (fmt_spec, ty) = match types[reg.0] {
-                        Type::Primitive(Primitive::Bool) => ("b", "char"),
-                        Type::Primitive(Primitive::I32) => ("d", "int32_t"),
+                    let (fmt_spec, ty) = match types[reg.0].ty {
+                        Variant::Primitive(Primitive::Bool) => ("b", "_Bool"),
+                        Variant::Primitive(Primitive::I32) => ("d", "int32_t"),
                         _ => unreachable!(),
                     };
 
@@ -164,30 +173,30 @@ fn write_c(digest: MirDigest, writer: &mut dyn Write) -> io::Result<()> {
                     ),
 
                     BinOpType::Equal => {
-                        let ty = match types[left.0] {
-                            Type::Primitive(Primitive::Bool) => "char",
-                            Type::Primitive(Primitive::I32) => "int32_t",
+                        let ty = match types[left.0].ty {
+                            Variant::Primitive(Primitive::Bool) => "_Bool",
+                            Variant::Primitive(Primitive::I32) => "int32_t",
                             _ => unreachable!(),
                         };
 
                         emit!(
                             "{} = {} == {};\n",
-                            get!(out, "char"),
+                            get!(out, "_Bool"),
                             get!(left, ty),
                             get!(right, ty),
                         )
                     }
 
                     BinOpType::NotEqual => {
-                        let ty = match types[left.0] {
-                            Type::Primitive(Primitive::Bool) => "char",
-                            Type::Primitive(Primitive::I32) => "int32_t",
+                        let ty = match types[left.0].ty {
+                            Variant::Primitive(Primitive::Bool) => "_Bool",
+                            Variant::Primitive(Primitive::I32) => "int32_t",
                             _ => unreachable!(),
                         };
 
                         emit!(
                             "{} = {} != {};\n",
-                            get!(out, "char"),
+                            get!(out, "_Bool"),
                             get!(left, ty),
                             get!(right, ty),
                         )
@@ -197,7 +206,9 @@ fn write_c(digest: MirDigest, writer: &mut dyn Write) -> io::Result<()> {
             }
         }
 
-        emit!("return 0;\n");
+        if block.children.is_empty() {
+            emit!("return 0;\n");
+        }
     }
 
     emit!("}}");

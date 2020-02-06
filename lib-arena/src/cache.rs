@@ -8,7 +8,6 @@ use std::mem::MaybeUninit;
 use parking_lot::RwLock;
 
 pub struct Cache<T> {
-    #[allow(clippy::vec_box)]
     data: RwLock<HashSet<Item<T>>>,
 }
 

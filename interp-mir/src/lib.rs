@@ -1,13 +1,16 @@
+
 use core_mir::{BinOpType, Load, Mir, PreOpType, Reg};
 use core_types::{Primitive, Type};
 use impl_pass_mir::encode::MirDigest;
 
 mod compile_to_c;
+#[cfg(FALSE)]
 mod stack_frame;
 mod variables;
 
 pub use compile_to_c::emit_c;
 
+#[cfg(FALSE)]
 pub fn interpret(digest: MirDigest) {
     let types = impl_pass_mir::type_check::infer_types(&digest).expect("Could not deduce types");
     let mut vars = variables::Variables::new(&types);

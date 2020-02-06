@@ -10,3 +10,6 @@ edition = "2018"
 impl-pass-mir = { path = '../impl-pass-mir' }
 core-mir = {  path = '../core-mir' }
 core-types = {  path = '../core-types' }
+
+lib-intern = {  path = '../lib-intern' }
+lib-arena = {  path = '../lib-arena' }
