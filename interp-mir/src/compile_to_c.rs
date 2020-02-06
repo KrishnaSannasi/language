@@ -6,50 +6,60 @@ use std::io::{self, Write};
 use std::alloc::Layout;
 
 pub fn layout(types: &[Ty<'_, '_>]) -> (Vec<usize>, Layout) {
-    use std::collections::{HashMap, BTreeSet, HashSet};
+    use std::cmp::Ordering;
+
+    #[derive(Clone, Copy, Eq)]
+    struct OrdTy<'idt, 'tcx>(Ty<'idt, 'tcx>);
+
+    impl PartialEq for OrdTy<'_, '_> {
+        fn eq(&self, other: &Self) -> bool {
+            self.cmp(other) == Ordering::Equal
+        }
+    }
+
+    impl PartialOrd for OrdTy<'_, '_> {
+        fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+            Some(self.cmp(other))
+        }
+    }
+
+    impl Ord for OrdTy<'_, '_> {
+        fn cmp(&self, other: &Self) -> Ordering {
+            self.0.align().cmp(&other.0.align())
+                .then(self.0.size.cmp(&other.0.size))
+                .reverse()
+        }
+    }
 
     let mut assign = vec![0; types.len()];
-    let mut types = types.to_vec();
-    
-    // sort by alignemnt, then by size in decreasing order of both
-    // This is a simple hueristic that will give the optimal
-    // packing when `align <= size` and `size % align == 0`
-    // in other cases there may be holes up to size `max_align - 1`
-    types.sort_unstable_by(|a, b| {
-        a.align().cmp(&b.align())
-            .then(a.size.cmp(&b.size))
-            .reverse()
-    });
-
-    let mut map = HashMap::new();
+    let mut map = std::collections::BTreeMap::new();
 
     for (i, &ty) in types.iter().enumerate() {
         // the order or variable assignments doesn't matter in general
         // but it is easier to test things using a stable output, 
-        // so BTreeSet is prefered for testing and `HashSet` is prefered
+        // so `BTreeSet` is prefered for testing and `HashSet` is prefered
         // for performace, this difference may matter for a large number of variables
-        map.entry(ty)
-            .or_insert_with(BTreeSet::new)
-            // .or_insert_with(HashSet::new)
+        map.entry(OrdTy(ty))
+            .or_insert_with(std::collections::BTreeSet::new)
+            // .or_insert_with(std::collections::HashSet::new)
             .insert(i);
     }
 
     let mut size = 0;
     let mut align = 1;
     
-    for ty in types {
+    for (OrdTy(ty), items) in map {
         // remove so that types don't get emitted twice
-        // because types
-        if let Some(items) = map.remove(ty) {
-            align = align.max(ty.align());
-            let mask = ty.align() - 1;
+        // because types in `types` are not guaranteed to be
+        // unique
+        align = align.max(ty.align());
+        let mask = ty.align() - 1;
 
-            for pos in items {
-                // fix alignment
-                size = (size + mask) & !mask;
-                assign[pos] = size;
-                size += ty.size;
-            }
+        for pos in items {
+            // fix alignment
+            size = (size + mask) & !mask;
+            assign[pos] = size;
+            size += ty.size;
         }
     }
 
