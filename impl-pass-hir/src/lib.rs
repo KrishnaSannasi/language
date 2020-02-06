@@ -11,7 +11,7 @@ pub struct Context<'str, 'idt, 'hir> {
 
 pub struct HirParser<'str, 'idt, 'hir, L> {
     context: Context<'str, 'idt, 'hir>,
-    lexer: PeekableLexer<'str, 'idt, L, 1>,
+    lexer: PeekableLexer<'str, 'idt, L, 2>,
 }
 
 type TNode<N> = <N as HasNode>::Node;
@@ -26,7 +26,7 @@ pub trait HasNode {
 
 impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HasNode for HirParser<'str, 'idt, 'hir, L> {
     type Node = Node<Hir<'str, 'idt, 'hir>>;
-    type Expr = Node<Expr<'str, 'idt>>;
+    type Expr = Node<Expr<'str, 'idt, 'hir>>;
     type SimpleExpr = Node<SimpleExpr<'str, 'idt>>;
 }
 
@@ -50,10 +50,23 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
         self.context.arena.alloc(node)
     }
 
+    pub fn peek(&mut self) -> Option<&core_tokens::TokenValue<core_tokens::Type>> {
+        self.lexer.peek_token(1).next()
+    }
+
+    pub fn peek_2(&mut self) -> Option<[&core_tokens::TokenValue<core_tokens::Type>; 2]> {
+        let mut iter = self.lexer.peek_token(2);
+
+        match (iter.next(), iter.next()) {
+            (Some(a), Some(b)) => Some([a, b]),
+            _ => None,
+        }
+    }
+
     pub fn parse(&mut self) -> Option<TNode<Self>> {
         use core_tokens::{GroupPos, Grouping, Type};
 
-        let token = self.lexer.peek_token(1).next()?;
+        let token = self.peek()?;
 
         match token.ty {
             Type::Keyword(kw!(print)) => self.parse_print(),
@@ -223,6 +236,20 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
         })
     }
 
+    pub fn parse_function(&mut self) -> Option<TExpr<Self>> {
+        let param = self.lexer.parse_ident()?;
+        self.lexer.parse_sym(Some(sym!(->)))?;
+        let body = self.parse()?;
+        
+        Some(Node {
+            span: param.span.to(body.span),
+            val: Expr::Func {
+                param: param.ty,
+                body: self.context.arena.alloc(body)
+            },
+        })
+    }
+
     pub fn parse_loop(&mut self) -> Option<TNode<Self>> {
         let start = self.lexer.parse_keyword(Some(kw!(loop)))?;
         let block = self.parse_scope()?;
@@ -235,6 +262,13 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
 
     pub fn parse_expr(&mut self) -> Option<TExpr<Self>> {
         use core_tokens::Type;
+
+        if let Some([
+            core_tokens::TokenValue { ty: Type::Ident(_), .. },
+            core_tokens::TokenValue { ty: Type::Symbol(sym!(->)), .. },
+        ]) = self.peek_2() {
+            return self.parse_function();
+        }
 
         let expr = self.parse_simple_expr()?;
 

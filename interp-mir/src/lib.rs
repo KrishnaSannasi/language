@@ -1,6 +1,6 @@
-use core_mir::{BinOpType, Load, Mir, PreOpType, Reg};
+use core_mir::{BinOpType, Load, PreOpType, Reg};
 use core_types::{Type, Primitive};
-use impl_pass_mir::encode::MirDigest;
+use impl_pass_mir::{Mir, Block, StackFrame};
 
 mod stack_frame;
 mod variables;
@@ -8,12 +8,12 @@ mod compile_to_c;
 
 pub use compile_to_c::emit_c;
 
-pub fn interpret(digest: MirDigest) {
+pub fn interpret(digest: StackFrame) {
     let types = impl_pass_mir::type_check::infer_types(&digest).expect("Could not deduce types");
     let mut vars = variables::Variables::new(&types);
 
-    let blocks = &digest.blocks;
-    let mut current_block = blocks[0].as_ref().unwrap().mir.iter();
+    let blocks = digest.blocks();
+    let mut current_block = blocks[0].instructions.iter();
 
     while let Some(mir) = current_block.next() {
         match *mir {
@@ -22,10 +22,10 @@ pub fn interpret(digest: MirDigest) {
                 Type::Primitive(Primitive::I32) => println!("{}", vars.get::<i32>(reg)),
                 Type::Inf(_) => unreachable!(),
             },
-            Mir::Jump(target) => current_block = blocks[target].as_ref().unwrap().mir.iter(),
+            Mir::Jump(target) => current_block = blocks[target].instructions.iter(),
             Mir::BranchTrue { ref cond, target } => {
                 if vars.get::<bool>(cond.0) {
-                    current_block = blocks[target].as_ref().unwrap().mir.iter()
+                    current_block = blocks[target].instructions.iter()
                 }
             }
             Mir::Load { to: Reg(to), from } => match from {
@@ -105,13 +105,16 @@ pub fn interpret(digest: MirDigest) {
                 out: Reg(to),
                 arg: Reg(arg),
             } => {
-                todo!();
+                todo!("interp preop");
                 // let arg = mem[arg];
 
                 // mem[to] = match op {
                 //     PreOpType::Not => !arg,
                 //     PreOpType::Neg => -arg,
                 // };
+            }
+            Mir::Func { ref stack_frame } => {
+                todo!("interp func")
             }
         }
     }

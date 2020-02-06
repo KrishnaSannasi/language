@@ -1,11 +1,11 @@
-use core_mir::{BinOpType, Load, Mir, PreOpType, Reg};
+use core_mir::{BinOpType, Load, PreOpType, Reg};
 use core_types::{Type, Primitive};
-use impl_pass_mir::encode::MirDigest;
+use impl_pass_mir::{Mir, Block, StackFrame};
 use std::io::{self, Write};
 
 use crate::variables;
 
-pub fn emit_c(digest: MirDigest, mut writer: impl Write) -> io::Result<()> {
+pub fn emit_c(digest: StackFrame, mut writer: impl Write) -> io::Result<()> {
     write_c(digest, &mut writer)
 }
 
@@ -21,7 +21,7 @@ impl std::fmt::Display for GetLocal<'_, '_> {
     }
 }
 
-fn write_c(digest: MirDigest, writer: &mut dyn Write) -> io::Result<()> {
+fn write_c(digest: StackFrame, writer: &mut dyn Write) -> io::Result<()> {
     macro_rules! emit {
         ($($t:tt)*) => {
             write!(writer, $($t)*)?;
@@ -48,9 +48,9 @@ fn write_c(digest: MirDigest, writer: &mut dyn Write) -> io::Result<()> {
 
     emit!("char locals[{size}] __attribute__((aligned({align})));\n", size=layout.size(), align=layout.align());
 
-    for (block_idx, block) in digest.blocks.iter().enumerate().flat_map(|(i, x)| Some((i, x.as_ref()?))) {
+    for (block_idx, block) in digest.blocks().iter().enumerate() {
         emit!("\n_label_{}:\n", block_idx);
-        for mir in block.mir.iter() {
+        for mir in block.instructions.iter() {
             match *mir {
                 Mir::Jump(j) => {
                     emit!("goto _label_{};\n", j);
@@ -155,13 +155,18 @@ fn write_c(digest: MirDigest, writer: &mut dyn Write) -> io::Result<()> {
                         }
                     }
                 }
-                Mir::PreOp { op, out, arg }=> {
-                    todo!()
+                Mir::PreOp { op, out, arg } => {
+                    todo!("encode c preop")
+                }
+                Mir::Func { ref stack_frame } => {
+                    todo!("encode c func")
                 }
             }
         }
 
-        emit!("return 0;\n");
+        if block.meta.children.is_empty() {
+            emit!("return 0;\n");
+        }
     }
 
     emit!("}}");

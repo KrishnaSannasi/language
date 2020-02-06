@@ -1,10 +1,10 @@
 use core_mir::{BinOpType, Load, Mir, Reg};
 use core_types::{Primitive, Type};
 
-use crate::encode::MirDigest;
+use super::*;
 
-pub fn infer_types(mir: &MirDigest) -> Option<Vec<Type>> {
-    let mut types = (0..mir.max_reg_count).map(Type::Inf).collect::<Vec<_>>();
+pub fn infer_types(frame: &StackFrame) -> Option<Vec<Type>> {
+    let mut types = (0..frame.meta.max_reg_count).map(Type::Inf).collect::<Vec<_>>();
 
     macro_rules! write_type {
         ($reg:ident <- $ty:expr) => {{
@@ -47,8 +47,8 @@ pub fn infer_types(mir: &MirDigest) -> Option<Vec<Type>> {
         }};
     };
 
-    for block in mir.blocks.iter().flatten() {
-        for mir in block.mir.iter() {
+    for block in frame.blocks().iter() {
+        for mir in block.instructions.iter() {
             match *mir {
                 Mir::Jump(_) | Mir::Print(_) => {
                     // no types can be gleaned from a print/jump
@@ -106,6 +106,7 @@ pub fn infer_types(mir: &MirDigest) -> Option<Vec<Type>> {
                     }
                 },
                 Mir::PreOp { .. } => {}
+                Mir::Func { ref stack_frame } => {},
             }
         }
     }

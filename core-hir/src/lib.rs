@@ -13,7 +13,7 @@ pub type Scope<'str, 'idt, 'hir> = Vec<Node<Hir<'str, 'idt, 'hir>>>;
 pub enum Hir<'str, 'idt, 'hir> {
     Let {
         pat: Node<Pattern<'str, 'idt>>,
-        value: Node<Expr<'str, 'idt>>,
+        value: Node<Expr<'str, 'idt, 'hir>>,
     },
     If {
         if_branch: If<'str, 'idt, 'hir>,
@@ -22,7 +22,7 @@ pub enum Hir<'str, 'idt, 'hir> {
     },
     Mut {
         pat: Node<Pattern<'str, 'idt>>,
-        value: Node<Expr<'str, 'idt>>,
+        value: Node<Expr<'str, 'idt, 'hir>>,
     },
     Print(Ident<'idt>),
     Scope(Scope<'str, 'idt, 'hir>),
@@ -31,7 +31,7 @@ pub enum Hir<'str, 'idt, 'hir> {
     ControlFlow {
         ty: ControlFlowType,
         label: Option<Ident<'idt>>,
-        val: Option<Expr<'str, 'idt>>,
+        val: Option<Expr<'str, 'idt, 'hir>>,
     },
 }
 
@@ -43,7 +43,7 @@ pub enum ControlFlowType {
 
 #[derive(Debug, PartialEq)]
 pub struct If<'str, 'idt, 'hir> {
-    pub cond: Node<Expr<'str, 'idt>>,
+    pub cond: Node<Expr<'str, 'idt, 'hir>>,
     pub branch: Node<Scope<'str, 'idt, 'hir>>,
 }
 
@@ -61,7 +61,7 @@ pub enum Pattern<'str, 'idt> {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Expr<'str, 'idt> {
+pub enum Expr<'str, 'idt, 'hir> {
     Simple(Node<SimpleExpr<'str, 'idt>>),
     PreOp(Operator, Node<SimpleExpr<'str, 'idt>>),
     PostOp(Operator, Node<SimpleExpr<'str, 'idt>>),
@@ -70,6 +70,10 @@ pub enum Expr<'str, 'idt> {
         Node<SimpleExpr<'str, 'idt>>,
         Node<SimpleExpr<'str, 'idt>>,
     ),
+    Func {
+        param: Ident<'idt>,
+        body: &'hir mut Node<Hir<'str, 'idt, 'hir>>,
+    },
     Tuple(Vec<Node<Pattern<'str, 'idt>>>),
 }
 

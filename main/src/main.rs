@@ -2,6 +2,10 @@ use lib_arena::{cache::Cache, local::LocalUniqueArena};
 use lib_intern::{Interner, Store};
 
 fn main() -> std::io::Result<()> {
+    let _ = std::fs::create_dir("target_c");
+    let _ = std::fs::create_dir("target_c/fragments");
+    let _ = std::fs::create_dir("target_c/fragment_objects");
+    
     let digest = {
         let file = std::env::args().nth(1).unwrap();
         let file = std::fs::read_to_string(file).unwrap();
@@ -31,17 +35,13 @@ fn main() -> std::io::Result<()> {
     println!("CODE");
 
     let blocks = digest
-        .blocks
+        .blocks()
         .iter()
-        .enumerate()
-        .filter_map(|(i, block)| match block {
-            Some(block) => Some((i, block)),
-            None => None,
-        });
+        .enumerate();
 
     for (i, block) in blocks.clone() {
         println!("BLOCK({:3})", i);
-        for (i, mir) in block.mir.iter().enumerate() {
+        for (i, mir) in block.instructions.iter().enumerate() {
             println!("{:3}: {:?}", i, mir);
         }
         println!()
@@ -54,7 +54,7 @@ fn main() -> std::io::Result<()> {
             "BLOCK({}):\
             \n\tparents: {:?}\
             \n\tchildren: {:?}",
-            i, block.parents, block.children
+            i, block.meta.parents, block.meta.children
         );
     }
 
@@ -72,7 +72,7 @@ fn main() -> std::io::Result<()> {
 
     interp_mir::emit_c(digest, &file)?;
 
-    std::process::Command::new("gcc")
+    let out = std::process::Command::new("gcc")
         .arg("-Iinc")
         .arg("-c")
         .arg("target_c/fragments/test.c")
@@ -80,22 +80,19 @@ fn main() -> std::io::Result<()> {
         .arg("target_c/fragment_objects/test.o")
         .arg("-O3")
         .stdout(std::process::Stdio::piped())
-        .spawn()?
-        .wait()?;
+        .output()?;
     
-    std::process::Command::new("gcc")
+    let out = std::process::Command::new("gcc")
         .arg("target_c/fragment_objects/test.o")
         .arg("-o")
         .arg("target_c/test.exe")
         .stdout(std::process::Stdio::piped())
-        .spawn()?
-        .wait()?;
-        
-    std::process::Command::new("./target_c/test.exe")
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()?
-        .wait()?;
+        .output()?;
+
+    // std::process::Command::new("./target_c/test.exe")
+    //     .stdout(std::process::Stdio::piped())
+    //     .stderr(std::process::Stdio::piped())
+    //     .output()?;
     
     // while let Some(hir_let) = hir_parser.parse() {
     //     dbg!(hir_let);
