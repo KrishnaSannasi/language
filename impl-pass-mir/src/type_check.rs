@@ -1,10 +1,71 @@
 use core_mir::{BinOpType, Load, Mir, Reg};
-use core_types::{Primitive, Type};
+use core_types::{Primitive, Ty, Type, Variant};
+
+use lib_arena::cache::Cache;
+use lib_intern::Interner;
 
 use crate::encode::MirDigest;
 
-pub fn infer_types(mir: &MirDigest) -> Option<Vec<Type>> {
-    let mut types = (0..mir.max_reg_count).map(Type::Inf).collect::<Vec<_>>();
+use vec_utils::VecExt;
+
+pub struct Context<'idt, 'tcx> {
+    pub ident: &'idt Interner,
+    pub ty: &'tcx Cache<Type<'idt>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Infer<'idt, 'tcx> {
+    Ty(Ty<'idt, 'tcx>),
+    Inf(usize),
+}
+
+impl Infer<'_, '_> {
+    fn is_inference(&self) -> bool {
+        match *self {
+            Infer::Inf(_) => true,
+            _ => false,
+        }
+    }
+}
+
+pub fn infer_types<'tcx, 'idt>(
+    mir: &MirDigest,
+    ctx: Context<'idt, 'tcx>,
+) -> Option<Vec<Ty<'idt, 'tcx>>> {
+    let mut types = (0..mir.max_reg_count).map(Infer::Inf).collect::<Vec<_>>();
+
+    macro_rules! register {
+        ($(
+            $ty_var:ident = $ty_name:ident {
+                size: $size:expr,
+                align: $align:expr,
+                variant: $variant:expr,
+            }
+        )*) => {$(
+            let $ty_var = ctx.ty.insert(
+                Type::new(
+                    core_tokens::Ident::new(ctx.ident.insert(stringify!($ty_name))),
+                    $variant,
+                )
+                    .with_size($size)
+                    .align_to($align)
+            );
+        )*};
+    }
+
+    register! {
+        bool_ty = bool {
+            size: 1,
+            align: 1,
+            variant: Variant::Primitive(Primitive::Bool),
+        }
+
+        i32_ty = i32 {
+            size: 4,
+            align: 4,
+            variant: Variant::Primitive(Primitive::I32),
+        }
+    }
 
     macro_rules! write_type {
         ($reg:ident <- $ty:expr) => {{
@@ -58,18 +119,16 @@ pub fn infer_types(mir: &MirDigest) -> Option<Vec<Type>> {
                 } => {
                     // cond must be a bool
 
-                    write_type!(cond <- Type::Primitive(Primitive::Bool));
+                    write_type!(cond <- Infer::Ty(bool_ty));
                 }
                 Mir::Load { to: Reg(to), from } => match from {
-                    Load::Bool(_) => write_type!(to <- Type::Primitive(Primitive::Bool)),
-                    Load::U8(_) | Load::U16(_) => {
-                        write_type!(to <- Type::Primitive(Primitive::I32))
-                    }
+                    Load::Bool(_) => write_type!(to <- Infer::Ty(bool_ty)),
+                    Load::U8(_) | Load::U16(_) => write_type!(to <- Infer::Ty(i32_ty)),
                     _ => {
                         eprintln!(
                             "TypeError ({}), found type: {{large integer}}, expected {:?}",
                             to,
-                            Type::Primitive(Primitive::I32),
+                            Infer::Ty(i32_ty),
                         );
 
                         return None;
@@ -88,20 +147,20 @@ pub fn infer_types(mir: &MirDigest) -> Option<Vec<Type>> {
                     right: Reg(right),
                 } => match op {
                     BinOpType::Add | BinOpType::Sub | BinOpType::Mul | BinOpType::Div => {
-                        write_type!(out <- Type::Primitive(Primitive::I32));
-                        write_type!(left <- Type::Primitive(Primitive::I32));
-                        write_type!(right <- Type::Primitive(Primitive::I32));
+                        write_type!(out <- Infer::Ty(i32_ty));
+                        write_type!(left <- Infer::Ty(i32_ty));
+                        write_type!(right <- Infer::Ty(i32_ty));
                     }
                     BinOpType::LessThan
                     | BinOpType::GreaterThan
                     | BinOpType::LessThanOrEqual
                     | BinOpType::GreaterThanOrEqual => {
-                        write_type!(out <- Type::Primitive(Primitive::Bool));
-                        write_type!(left <- Type::Primitive(Primitive::I32));
-                        write_type!(right <- Type::Primitive(Primitive::I32));
+                        write_type!(out <- Infer::Ty(bool_ty));
+                        write_type!(left <- Infer::Ty(i32_ty));
+                        write_type!(right <- Infer::Ty(i32_ty));
                     }
                     BinOpType::Equal | BinOpType::NotEqual => {
-                        write_type!(out <- Type::Primitive(Primitive::Bool));
+                        write_type!(out <- Infer::Ty(bool_ty));
                         write_type!(left == right);
                     }
                 },
@@ -114,13 +173,13 @@ pub fn infer_types(mir: &MirDigest) -> Option<Vec<Type>> {
         let mut has_changed = false;
 
         for ty in 0..types.len() {
-            if let Type::Inf(other) = types[ty] {
+            if let Infer::Inf(other) = types[ty] {
                 if other == ty {
                     eprintln!("Failed to infer type of {}", ty);
                 }
 
                 has_changed |= types[ty] != types[other];
-                types[ty] = types[other].clone();
+                types[ty] = types[other];
             }
         }
 
@@ -129,5 +188,8 @@ pub fn infer_types(mir: &MirDigest) -> Option<Vec<Type>> {
         }
     }
 
-    Some(types)
+    Some(types.map(|x| match x {
+        Infer::Ty(t) => t,
+        Infer::Inf(i) => panic!("inference failed at: {}", i),
+    }))
 }

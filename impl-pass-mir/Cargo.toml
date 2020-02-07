@@ -14,5 +14,6 @@ core-types = {  path = '../core-types' }
 
 lib-smallvec = { path = '../lib-smallvec' }
 lib-arena = {  path = '../lib-arena' }
+lib-intern = {  path = '../lib-intern' }
 
 vec-utils = '*'

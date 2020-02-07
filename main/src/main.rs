@@ -1,7 +1,11 @@
 use lib_arena::{cache::Cache, local::LocalUniqueArena};
 use lib_intern::{Interner, Store};
 
-fn main() {
+fn main() -> std::io::Result<()> {
+    let _ = std::fs::create_dir("target_c");
+    let _ = std::fs::create_dir("target_c/fragments");
+    let _ = std::fs::create_dir("target_c/fragment_objects");
+
     let digest = {
         let file = std::env::args().nth(1).unwrap();
         let file = std::fs::read_to_string(file).unwrap();
@@ -26,7 +30,16 @@ fn main() {
         impl_pass_mir::encode::write(hir_parser).expect("hi")
     };
 
-    let types = impl_pass_mir::type_check::infer_types(&digest).unwrap();
+    let ty_ctx = Cache::new();
+    let ident = Interner::new();
+    let types = impl_pass_mir::type_check::infer_types(
+        &digest,
+        impl_pass_mir::type_check::Context {
+            ident: &ident,
+            ty: &ty_ctx,
+        },
+    )
+    .unwrap();
 
     println!("CODE");
 
@@ -66,9 +79,41 @@ fn main() {
 
     println!("\nPROGRAM OUTPUT:\n");
 
-    interp_mir::interpret(digest);
+    // interp_mir::interpret(digest);
+
+    let file = std::fs::File::create("target_c/fragments/test.c")?;
+
+    let ty_names = lib_intern::Interner::new();
+    interp_mir::emit_c(digest, &file, &ty_names)?;
+
+    std::process::Command::new("gcc")
+        .arg("-Iinc")
+        .arg("-c")
+        .arg("target_c/fragments/test.c")
+        .arg("-o")
+        .arg("target_c/fragment_objects/test.o")
+        .arg("-O3")
+        .stdout(std::process::Stdio::piped())
+        .spawn()?
+        .wait()?;
+
+    std::process::Command::new("gcc")
+        .arg("target_c/fragment_objects/test.o")
+        .arg("-o")
+        .arg("target_c/test.exe")
+        .stdout(std::process::Stdio::piped())
+        .spawn()?
+        .wait()?;
+
+    std::process::Command::new("./target_c/test.exe")
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()?
+        .wait()?;
 
     // while let Some(hir_let) = hir_parser.parse() {
     //     dbg!(hir_let);
     // }
+
+    Ok(())
 }
