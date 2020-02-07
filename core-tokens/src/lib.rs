@@ -70,6 +70,12 @@ pub enum Type<'str, 'idt> {
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Ident<'idt>(InternStr<'idt>);
 
+impl PartialEq<str> for Ident<'_> {
+    fn eq(&self, other: &str) -> bool {
+        self.0.as_str() == other
+    }
+}
+
 use std::fmt;
 
 impl fmt::Debug for Ident<'_> {

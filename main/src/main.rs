@@ -2,6 +2,10 @@ use lib_arena::{cache::Cache, local::LocalUniqueArena};
 use lib_intern::{Interner, Store};
 
 fn main() -> std::io::Result<()> {
+    let _ = std::fs::create_dir("target_c");
+    let _ = std::fs::create_dir("target_c/fragments");
+    let _ = std::fs::create_dir("target_c/fragment_objects");
+
     let digest = {
         let file = std::env::args().nth(1).unwrap();
         let file = std::fs::read_to_string(file).unwrap();
@@ -26,7 +30,16 @@ fn main() -> std::io::Result<()> {
         impl_pass_mir::encode::write(hir_parser).expect("hi")
     };
 
-    let types = impl_pass_mir::type_check::infer_types(&digest).unwrap();
+    let ty_ctx = Cache::new();
+    let ident = Interner::new();
+    let types = impl_pass_mir::type_check::infer_types(
+        &digest,
+        impl_pass_mir::type_check::Context {
+            ident: &ident,
+            ty: &ty_ctx,
+        },
+    )
+    .unwrap();
 
     println!("CODE");
 
@@ -70,7 +83,8 @@ fn main() -> std::io::Result<()> {
 
     let file = std::fs::File::create("target_c/fragments/test.c")?;
 
-    interp_mir::emit_c(digest, &file)?;
+    let ty_names = lib_intern::Interner::new();
+    interp_mir::emit_c(digest, &file, &ty_names)?;
 
     std::process::Command::new("gcc")
         .arg("-Iinc")
@@ -82,7 +96,6 @@ fn main() -> std::io::Result<()> {
         .stdout(std::process::Stdio::piped())
         .spawn()?
         .wait()?;
-    
     std::process::Command::new("gcc")
         .arg("target_c/fragment_objects/test.o")
         .arg("-o")
@@ -90,13 +103,11 @@ fn main() -> std::io::Result<()> {
         .stdout(std::process::Stdio::piped())
         .spawn()?
         .wait()?;
-        
-    std::process::Command::new("./target_c/test.exe")
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()?
-        .wait()?;
-    
+    // std::process::Command::new("./target_c/test.exe")
+    //     .stdout(std::process::Stdio::piped())
+    //     .stderr(std::process::Stdio::piped())
+    //     .spawn()?
+    //     .wait()?;
     // while let Some(hir_let) = hir_parser.parse() {
     //     dbg!(hir_let);
     // }
