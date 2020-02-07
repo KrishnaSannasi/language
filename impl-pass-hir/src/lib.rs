@@ -239,13 +239,13 @@ impl<'str, 'idt, 'hir, L: Lexer<'str, 'idt>> HirParser<'str, 'idt, 'hir, L> {
     pub fn parse_function(&mut self) -> Option<TExpr<Self>> {
         let param = self.lexer.parse_ident()?;
         self.lexer.parse_sym(Some(sym!(->)))?;
-        let body = self.parse()?;
+        let body = self.parse_scope()?;
 
         Some(Node {
             span: param.span.to(body.span),
             val: Expr::Func {
                 param: param.ty,
-                body: self.context.arena.alloc(body),
+                body: body.val,
             },
         })
     }

@@ -198,7 +198,7 @@ where
                 encoder.scopes.push(Scope::default());
                 encoder.insert(param);
 
-                encode_iter(&mut encoder, std::iter::once_with(move || std::mem::take(body)))?;
+                encode_iter(&mut encoder, body)?;
 
                 let stack_frame = StackFrame::new(
                     encoder.blocks,

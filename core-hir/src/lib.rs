@@ -9,14 +9,14 @@ pub struct Node<N> {
 pub type HirNode<'str, 'idt, 'hir> = Node<Hir<'str, 'idt, 'hir>>;
 pub type Scope<'str, 'idt, 'hir> = Vec<Node<Hir<'str, 'idt, 'hir>>>;
 
-impl<'str, 'idt, 'hir> Default for Node<Hir<'str, 'idt, 'hir>> {
-    fn default() -> Self {
-        Node {
-            val: Hir::Scope(Vec::new()),
-            span: Span::new(0, 0),
-        }
-    }
-}
+// impl<'str, 'idt, 'hir> Default for Node<Hir<'str, 'idt, 'hir>> {
+//     fn default() -> Self {
+//         Node {
+//             val: Hir::Scope(Vec::new()),
+//             span: Span::new(0, 0),
+//         }
+//     }
+// }
 
 #[derive(Debug, PartialEq)]
 pub enum Hir<'str, 'idt, 'hir> {
@@ -81,7 +81,7 @@ pub enum Expr<'str, 'idt, 'hir> {
     ),
     Func {
         param: Ident<'idt>,
-        body: &'hir mut Node<Hir<'str, 'idt, 'hir>>,
+        body: Scope<'str, 'idt, 'hir>,
     },
     Tuple(Vec<Node<Pattern<'str, 'idt>>>),
 }
