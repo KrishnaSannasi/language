@@ -8,6 +8,11 @@ use super::*;
 
 use vec_utils::VecExt;
 
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+use std::collections::BTreeMap;
+
+static FUNC_ID: AtomicU64 = AtomicU64::new(0);
+
 pub struct Context<'idt, 'tcx> {
     pub ident: &'idt Interner,
     pub ty: &'tcx Cache<Type<'idt>>,
@@ -38,7 +43,8 @@ pub fn infer_types<'tcx, 'idt>(
 
     macro_rules! register {
         ($(
-            $ty_var:ident = $ty_name:ident {
+            $ty_var:ident {
+                name: $name:expr,
                 size: $size:expr,
                 align: $align:expr,
                 variant: $variant:expr,
@@ -46,7 +52,7 @@ pub fn infer_types<'tcx, 'idt>(
         )*) => {$(
             let $ty_var = ctx.ty.insert(
                 Type::new(
-                    core_tokens::Ident::new(ctx.ident.insert(stringify!($ty_name))),
+                    core_tokens::Ident::new(ctx.ident.insert(&$name)),
                     $variant,
                 )
                     .with_size($size)
@@ -56,13 +62,15 @@ pub fn infer_types<'tcx, 'idt>(
     }
 
     register! {
-        bool_ty = bool {
+        bool_ty {
+            name: "bool",
             size: 1,
             align: 1,
             variant: Variant::Primitive(Primitive::Bool),
         }
 
-        i32_ty = i32 {
+        i32_ty {
+            name: "i32",
             size: 4,
             align: 4,
             variant: Variant::Primitive(Primitive::I32),
@@ -167,8 +175,23 @@ pub fn infer_types<'tcx, 'idt>(
                     }
                 },
                 Mir::PreOp { .. } => {}
-                Mir::CreateFunc { binding, ref stack_frame } => {
+                Mir::CreateFunc { binding: Reg(binding), ref stack_frame } => {
+                    let id = FUNC_ID.fetch_add(1, Relaxed);
                     
+                    if id > (u64::max_value() >> 1) {
+                        panic!("tried to create too many functions!")
+                    }
+
+                    register! {
+                        func_ty {
+                            name: format!("[closure: {}", id),
+                            size: 0,
+                            align: 1,
+                            variant: Variant::Struct { fields: BTreeMap::new() },
+                        }
+                    }
+
+                    write_type!(binding <- Infer::Ty(func_ty));
                 }
             }
         }

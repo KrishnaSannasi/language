@@ -67,7 +67,7 @@ pub enum Type<'str, 'idt> {
     Grouping(GroupPos, Grouping),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Ident<'idt>(InternStr<'idt>);
 
 impl PartialEq<str> for Ident<'_> {

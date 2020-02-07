@@ -79,6 +79,65 @@ impl PartialEq<Str<'_, Dynamic>> for Str<'_, Dynamic> {
     }
 }
 
+impl PartialOrd<Str<'_, Intern>> for Str<'_, Intern> {
+    fn partial_cmp(&self, other: &Str<'_, Intern>) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialOrd<Str<'_, Data>> for Str<'_, Data> {
+    fn partial_cmp(&self, other: &Str<'_, Data>) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Str<'_, Intern> {
+    fn cmp(&self, other: &Str<'_, Intern>) -> std::cmp::Ordering {
+        self.ptr.cmp(&other.ptr)
+    }
+}
+
+impl Ord for Str<'_, Data> {
+    fn cmp(&self, other: &Str<'_, Data>) -> std::cmp::Ordering {
+        self.as_str().cmp(other.as_str())
+    }
+}
+
+impl PartialOrd<Str<'_, Dynamic>> for Str<'_, Dynamic> {
+    fn partial_cmp(&self, other: &Str<'_, Dynamic>) -> Option<std::cmp::Ordering> {
+        let s_ptr = self.ptr.as_ptr() as usize;
+        let o_ptr = other.ptr.as_ptr() as usize;
+
+        match ((s_ptr & 1) == 0, (o_ptr & 1) == 0) {
+            (true, true) => {
+                let s = DataStr {
+                    ptr: self.ptr,
+                    mark: PhantomData,
+                };
+                let o = DataStr {
+                    ptr: other.ptr,
+                    mark: PhantomData,
+                };
+
+                s.partial_cmp(&o)
+            }
+            (false, false) => {
+                let s = InternStr {
+                    ptr: self.ptr,
+                    mark: PhantomData,
+                };
+                let o = InternStr {
+                    ptr: other.ptr,
+                    mark: PhantomData,
+                };
+
+                s.partial_cmp(&o)
+            }
+            (false, true) | (true, false) => None,
+        }
+    }
+}
+
 use std::hash::{Hash, Hasher};
 
 impl Hash for Str<'_, Intern> {
