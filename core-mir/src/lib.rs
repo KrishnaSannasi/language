@@ -86,7 +86,8 @@ pub enum Mir<BMeta, FMeta> {
         out: Reg,
         arg: Reg,
     },
-    Func {
+    CreateFunc {
+        binding: Reg,
         stack_frame: StackFrame<BMeta, FMeta>,
     },
 }

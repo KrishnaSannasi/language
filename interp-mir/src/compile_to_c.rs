@@ -263,7 +263,7 @@ fn write_c<'idt>(
                     }
                 },
                 Mir::PreOp { op, out, arg } => todo!("comp2c preop"),
-                Mir::Func { ref stack_frame } => todo!("comp2c func"),
+                Mir::CreateFunc { binding, ref stack_frame } => todo!("comp2c func"),
             }
         }
 

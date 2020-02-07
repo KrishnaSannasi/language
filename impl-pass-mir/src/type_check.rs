@@ -167,7 +167,9 @@ pub fn infer_types<'tcx, 'idt>(
                     }
                 },
                 Mir::PreOp { .. } => {}
-                Mir::Func { ref stack_frame } => {}
+                Mir::CreateFunc { binding, ref stack_frame } => {
+                    
+                }
             }
         }
     }

@@ -9,6 +9,15 @@ pub struct Node<N> {
 pub type HirNode<'str, 'idt, 'hir> = Node<Hir<'str, 'idt, 'hir>>;
 pub type Scope<'str, 'idt, 'hir> = Vec<Node<Hir<'str, 'idt, 'hir>>>;
 
+impl<'str, 'idt, 'hir> Default for Node<Hir<'str, 'idt, 'hir>> {
+    fn default() -> Self {
+        Node {
+            val: Hir::Scope(Vec::new()),
+            span: Span::new(0, 0),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 pub enum Hir<'str, 'idt, 'hir> {
     Let {

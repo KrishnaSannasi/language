@@ -184,7 +184,37 @@ where
                 let to = to(self);
                 self.encode((simple, to))
             }
-            Expr::Func { param, body } => todo!("func"),
+            Expr::Func { param, body } => {
+                let mut encoder = Encoder::default();
+
+                encoder.blocks.push(Block {
+                    instructions: Vec::new(),
+                    meta: BlockMeta {
+                        parents: HashSet::new(),
+                        children: HashSet::new(),
+                    },
+                });
+
+                encoder.scopes.push(Scope::default());
+                encoder.insert(param);
+
+                encode_iter(&mut encoder, std::iter::once_with(move || std::mem::take(body)))?;
+
+                let stack_frame = StackFrame::new(
+                    encoder.blocks,
+                    FrameMeta {
+                        max_reg_count: encoder.max_reg_count,
+                    },
+                )?;
+
+                let binding = to(self);
+
+                self.blocks[self.current_block]
+                    .instructions
+                    .push(Mir::CreateFunc { binding, stack_frame });
+                
+                Some(binding)
+            },
             Expr::BinOp(op, left, right) => {
                 use core_hir::Operator;
                 use core_mir::BinOpType;
