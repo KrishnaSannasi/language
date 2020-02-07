@@ -5,7 +5,7 @@ fn main() -> std::io::Result<()> {
     let _ = std::fs::create_dir("target_c");
     let _ = std::fs::create_dir("target_c/fragments");
     let _ = std::fs::create_dir("target_c/fragment_objects");
-    
+
     let digest = {
         let file = std::env::args().nth(1).unwrap();
         let file = std::fs::read_to_string(file).unwrap();
@@ -32,9 +32,14 @@ fn main() -> std::io::Result<()> {
 
     let ty_ctx = Cache::new();
     let ident = Interner::new();
-    let types = impl_pass_mir::type_check::infer_types(&digest, impl_pass_mir::type_check::Context {
-        ident: &ident, ty: &ty_ctx
-    }).unwrap();
+    let types = impl_pass_mir::type_check::infer_types(
+        &digest,
+        impl_pass_mir::type_check::Context {
+            ident: &ident,
+            ty: &ty_ctx,
+        },
+    )
+    .unwrap();
 
     println!("CODE");
 

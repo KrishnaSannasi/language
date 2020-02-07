@@ -1,4 +1,3 @@
-
 use core_mir::{BinOpType, Load, Mir, PreOpType, Reg};
 use core_types::{Primitive, Type};
 use impl_pass_mir::encode::MirDigest;

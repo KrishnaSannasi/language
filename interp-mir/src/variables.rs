@@ -1,9 +1,9 @@
 use std::alloc::Layout;
 
 // use crate::stack_frame::StackFrame;
-use core_types::{Primitive, Type, Ty};
+use core_types::{Primitive, Ty, Type};
 
-use std::collections::{HashMap, HashSet, BTreeSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 pub struct Variables<'a, 'idt, 'tcx> {
     types: &'a [Ty<'idt, 'tcx>],
@@ -12,8 +12,6 @@ pub struct Variables<'a, 'idt, 'tcx> {
 }
 
 impl<'a, 'idt, 'tcx> Variables<'a, 'idt, 'tcx> {
-    
-
     // pub fn new(types: &'a [Ty<'idt, 'tcx>]) -> Self {
     //     let (assign, layout) = Self::layout(types);
 

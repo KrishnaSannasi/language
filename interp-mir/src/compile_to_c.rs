@@ -1,5 +1,5 @@
 use core_mir::{BinOpType, Load, Mir, PreOpType, Reg};
-use core_types::{Ty, Type, Variant, Primitive};
+use core_types::{Primitive, Ty, Type, Variant};
 use impl_pass_mir::encode::MirDigest;
 use std::io::{self, Write};
 
@@ -25,7 +25,9 @@ pub fn layout(types: &[Ty<'_, '_>]) -> (Vec<usize>, Layout) {
 
     impl Ord for OrdTy<'_, '_> {
         fn cmp(&self, other: &Self) -> Ordering {
-            self.0.align().cmp(&other.0.align())
+            self.0
+                .align()
+                .cmp(&other.0.align())
                 .then(self.0.size.cmp(&other.0.size))
                 .reverse()
         }
@@ -36,7 +38,7 @@ pub fn layout(types: &[Ty<'_, '_>]) -> (Vec<usize>, Layout) {
 
     for (i, &ty) in types.iter().enumerate() {
         // the order or variable assignments doesn't matter in general
-        // but it is easier to test things using a stable output, 
+        // but it is easier to test things using a stable output,
         // so `BTreeSet` is prefered for testing and `HashSet` is prefered
         // for performace, this difference may matter for a large number of variables
         map.entry(OrdTy(ty))
@@ -47,7 +49,7 @@ pub fn layout(types: &[Ty<'_, '_>]) -> (Vec<usize>, Layout) {
 
     let mut size = 0;
     let mut align = 1;
-    
+
     for (OrdTy(ty), items) in map {
         // remove so that types don't get emitted twice
         // because types in `types` are not guaranteed to be
@@ -66,7 +68,11 @@ pub fn layout(types: &[Ty<'_, '_>]) -> (Vec<usize>, Layout) {
     (assign, Layout::from_size_align(size, align).unwrap())
 }
 
-pub fn emit_c(digest: MirDigest, mut writer: impl Write, ident: &lib_intern::Interner) -> io::Result<()> {
+pub fn emit_c(
+    digest: MirDigest,
+    mut writer: impl Write,
+    ident: &lib_intern::Interner,
+) -> io::Result<()> {
     write_c(digest, &mut writer, ident)
 }
 
@@ -82,7 +88,11 @@ impl std::fmt::Display for GetLocal<'_, '_> {
     }
 }
 
-fn write_c<'idt>(digest: MirDigest, writer: &mut dyn Write, ident: &'idt lib_intern::Interner) -> io::Result<()> {
+fn write_c<'idt>(
+    digest: MirDigest,
+    writer: &mut dyn Write,
+    ident: &'idt lib_intern::Interner,
+) -> io::Result<()> {
     macro_rules! emit {
         ($($t:tt)*) => {
             write!(writer, $($t)*)?;
@@ -100,11 +110,9 @@ fn write_c<'idt>(digest: MirDigest, writer: &mut dyn Write, ident: &'idt lib_int
     let ty_ctx = lib_arena::cache::Cache::new();
     let types = impl_pass_mir::type_check::infer_types(
         &digest,
-        impl_pass_mir::type_check::Context {
-            ident,
-            ty: &ty_ctx,
-        }
-    ).expect("Could not deduce types");
+        impl_pass_mir::type_check::Context { ident, ty: &ty_ctx },
+    )
+    .expect("Could not deduce types");
     let (assign, layout) = layout(&types);
 
     macro_rules! get {
@@ -136,11 +144,7 @@ fn write_c<'idt>(digest: MirDigest, writer: &mut dyn Write, ident: &'idt lib_int
                     emit!("goto _label_{};\n", j);
                 }
                 Mir::BranchTrue { cond, target } => {
-                    emit!(
-                        "if( {} ) goto _label_{};\n",
-                        get!(cond, "_Bool"),
-                        target
-                    );
+                    emit!("if( {} ) goto _label_{};\n", get!(cond, "_Bool"), target);
                 }
                 Mir::Load { from, to } => {
                     let ty = match types[to.0].ty {
@@ -161,7 +165,12 @@ fn write_c<'idt>(digest: MirDigest, writer: &mut dyn Write, ident: &'idt lib_int
                 Mir::LoadReg { from, to } => {
                     let ty = &types[to.0];
                     assert_eq!(ty, &types[from.0], "type check failure");
-                    emit!("memcpy(locals + {}, locals + {}, {});\n", assign[to.0], assign[from.0], ty.size);
+                    emit!(
+                        "memcpy(locals + {}, locals + {}, {});\n",
+                        assign[to.0],
+                        assign[from.0],
+                        ty.size
+                    );
                 }
                 Mir::Print(reg) => {
                     let (fmt_spec, ty) = match types[reg.0].ty {

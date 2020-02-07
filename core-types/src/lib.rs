@@ -1,19 +1,23 @@
 use core_tokens::Ident;
+use std::collections::BTreeMap;
 
-pub type Ty<'idt, 'tcx> = &'tcx Type<'idt, 'tcx>;
+pub type Ty<'idt, 'tcx> = &'tcx Type<'idt>;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-pub struct Type<'idt, 'tcx> {
+pub struct Type<'idt> {
     pub name: Ident<'idt>,
-    pub ty: Variant<'idt, 'tcx>,
+    pub ty: Variant<'idt>,
     pub size: usize,
     align: usize,
 }
 
-impl<'idt, 'tcx> Type<'idt, 'tcx> {
-    pub const fn new(name: Ident<'idt>, ty: Variant<'idt, 'tcx>) -> Self {
+impl<'idt> Type<'idt> {
+    pub const fn new(name: Ident<'idt>, ty: Variant<'idt>) -> Self {
         Self {
-            name, ty, align: 1, size: 0,
+            name,
+            ty,
+            align: 1,
+            size: 0,
         }
     }
 
@@ -33,43 +37,16 @@ impl<'idt, 'tcx> Type<'idt, 'tcx> {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-pub enum Variant<'idt, 'tcx> {
+pub enum Variant<'idt> {
     Primitive(Primitive),
-    Trait {
-
-    },
+    Trait {},
     Struct {
-        fields: Vec<Ty<'idt, 'tcx>>,
-    }
+        fields: BTreeMap<Ident<'idt>, usize>,
+    },
 }
-
-// #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-// pub enum Type {
-//     Primitive(Primitive),
-//     Inf(usize),
-// }
-
-// #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-// pub enum Void {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Primitive {
     Bool,
     I32,
 }
-
-// impl Type {
-//     pub fn is_primitive(&self) -> bool {
-//         match *self {
-//             Type::Primitive(_) => true,
-//             _ => false,
-//         }
-//     }
-
-//     pub fn is_inference(&self) -> bool {
-//         match *self {
-//             Type::Inf(_) => true,
-//             _ => false,
-//         }
-//     }
-// }

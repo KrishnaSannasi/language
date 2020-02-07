@@ -1,5 +1,5 @@
 use core_mir::{BinOpType, Load, Mir, Reg};
-use core_types::{Primitive, Type, Ty, Variant};
+use core_types::{Primitive, Ty, Type, Variant};
 
 use lib_arena::cache::Cache;
 use lib_intern::Interner;
@@ -10,7 +10,7 @@ use vec_utils::VecExt;
 
 pub struct Context<'idt, 'tcx> {
     pub ident: &'idt Interner,
-    pub ty: &'tcx Cache<Type<'idt, 'tcx>>,
+    pub ty: &'tcx Cache<Type<'idt>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,7 +28,10 @@ impl Infer<'_, '_> {
     }
 }
 
-pub fn infer_types<'tcx, 'idt>(mir: &MirDigest, ctx: Context<'idt, 'tcx>) -> Option<Vec<Ty<'idt, 'tcx>>> {
+pub fn infer_types<'tcx, 'idt>(
+    mir: &MirDigest,
+    ctx: Context<'idt, 'tcx>,
+) -> Option<Vec<Ty<'idt, 'tcx>>> {
     let mut types = (0..mir.max_reg_count).map(Infer::Inf).collect::<Vec<_>>();
 
     macro_rules! register {
@@ -120,9 +123,7 @@ pub fn infer_types<'tcx, 'idt>(mir: &MirDigest, ctx: Context<'idt, 'tcx>) -> Opt
                 }
                 Mir::Load { to: Reg(to), from } => match from {
                     Load::Bool(_) => write_type!(to <- Infer::Ty(bool_ty)),
-                    Load::U8(_) | Load::U16(_) => {
-                        write_type!(to <- Infer::Ty(i32_ty))
-                    }
+                    Load::U8(_) | Load::U16(_) => write_type!(to <- Infer::Ty(i32_ty)),
                     _ => {
                         eprintln!(
                             "TypeError ({}), found type: {{large integer}}, expected {:?}",
