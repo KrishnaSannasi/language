@@ -211,10 +211,13 @@ where
 
                 self.blocks[self.current_block]
                     .instructions
-                    .push(Mir::CreateFunc { binding, stack_frame });
-                
+                    .push(Mir::CreateFunc {
+                        binding,
+                        stack_frame,
+                    });
+
                 Some(binding)
-            },
+            }
             Expr::BinOp(op, left, right) => {
                 use core_hir::Operator;
                 use core_mir::BinOpType;

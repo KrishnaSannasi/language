@@ -8,8 +8,8 @@ use super::*;
 
 use vec_utils::VecExt;
 
-use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
 
 static FUNC_ID: AtomicU64 = AtomicU64::new(0);
 
@@ -175,16 +175,19 @@ pub fn infer_types<'tcx, 'idt>(
                     }
                 },
                 Mir::PreOp { .. } => {}
-                Mir::CreateFunc { binding: Reg(binding), ref stack_frame } => {
+                Mir::CreateFunc {
+                    binding: Reg(binding),
+                    ref stack_frame,
+                } => {
                     let id = FUNC_ID.fetch_add(1, Relaxed);
-                    
+
                     if id > (u64::max_value() >> 1) {
                         panic!("tried to create too many functions!")
                     }
 
                     register! {
                         func_ty {
-                            name: format!("[closure: {}", id),
+                            name: format!("_user_function_{}", id),
                             size: 0,
                             align: 1,
                             variant: Variant::Struct { fields: BTreeMap::new() },
