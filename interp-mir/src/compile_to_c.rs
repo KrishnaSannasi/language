@@ -265,6 +265,7 @@ fn write_c<'idt>(
                 Mir::PreOp { op, out, arg } => todo!("comp2c preop"),
                 Mir::CreateFunc {
                     binding,
+                    ret,
                     ref stack_frame,
                 } => {
                     if types[binding.0].size == 0 {
@@ -273,6 +274,7 @@ fn write_c<'idt>(
 
                     todo!("comp2c stateful-func")
                 }
+                _ => todo!("comp2c extra"),
             }
         }
 

@@ -121,7 +121,7 @@ pub fn infer_types<'tcx, 'idt>(
     for block in frame.blocks().iter() {
         for mir in block.instructions.iter() {
             match *mir {
-                Mir::Jump(_) | Mir::Print(_) => {
+                Mir::CallFunction | Mir::Jump(_) | Mir::Print(_) => {
                     // no types can be gleaned from a print/jump
                 }
                 Mir::BranchTrue {
@@ -177,6 +177,7 @@ pub fn infer_types<'tcx, 'idt>(
                 Mir::PreOp { .. } => {}
                 Mir::CreateFunc {
                     binding: Reg(binding),
+                    ret: Reg(ret),
                     ref stack_frame,
                 } => {
                     let id = FUNC_ID.fetch_add(1, Relaxed);
@@ -196,6 +197,12 @@ pub fn infer_types<'tcx, 'idt>(
 
                     write_type!(binding <- Infer::Ty(func_ty));
                 }
+                Mir::LoadFunction {
+                    func: Reg(func),
+                    ret: Reg(ret),
+                } => {}
+                Mir::PopArgument { arg: Reg(func) } => {}
+                Mir::PushArguement { arg: Reg(func) } => {}
             }
         }
     }

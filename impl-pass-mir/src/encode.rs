@@ -173,18 +173,68 @@ where
 {
     type Output = Reg;
 
-    fn encode(&mut self, (value, to): (Node<Expr<'str, 'idt, 'hir>>, F)) -> Option<Self::Output> {
+    fn encode(
+        &mut self,
+        (mut value, to): (Node<Expr<'str, 'idt, 'hir>>, F),
+    ) -> Option<Self::Output> {
+        self.encode((&mut value, to))
+    }
+}
+
+impl<'tcx, 'idt, 'str, 'hir, F> Encode<(&mut Node<Expr<'str, 'idt, 'hir>>, F)> for Encoder<'idt>
+where
+    F: FnOnce(&mut Self) -> Reg,
+{
+    type Output = Reg;
+
+    fn encode(
+        &mut self,
+        (value, to): (&mut Node<Expr<'str, 'idt, 'hir>>, F),
+    ) -> Option<Self::Output> {
         let reg;
 
         match value.val {
-            Expr::PreOp(op, right) => todo!("preop"),
-            Expr::PostOp(op, left) => todo!("postop"),
-            Expr::Tuple(lit) => todo!("tuple"),
+            Expr::PreOp(op, ref right) => todo!("preop"),
+            Expr::PostOp(op, ref left) => todo!("postop"),
+            Expr::Tuple(ref lit) => todo!("tuple"),
             Expr::Simple(simple) => {
                 let to = to(self);
                 self.encode((simple, to))
             }
-            Expr::Func { param, body } => {
+            Expr::Scope(ref mut scope) => {
+                self.encode(std::mem::take(scope))?;
+                let reg = to(self); // TODO: initialize the return register
+                Some(reg)
+            }
+            Expr::FuncApp { ref mut name_args } => {
+                let (name, args) = name_args.split_at_mut(1);
+                let name = &mut name[0];
+                let name = self.encode((name, Self::temp))?;
+
+                let mut reg_args = Vec::with_capacity(args.len());
+
+                for arg in args {
+                    reg_args.push(Mir::PushArguement {
+                        arg: self.encode((arg, Self::temp))?,
+                    });
+                }
+
+                let ret = to(self);
+                let block = &mut self.blocks[self.current_block];
+
+                block.instructions.reserve(reg_args.len() + 2);
+                block
+                    .instructions
+                    .push(Mir::LoadFunction { func: name, ret });
+                block.instructions.extend(reg_args);
+                block.instructions.push(Mir::CallFunction);
+
+                Some(ret)
+            }
+            Expr::Func {
+                ref parameter_list,
+                ref mut body,
+            } => {
                 let mut encoder = Encoder::default();
 
                 encoder.blocks.push(Block {
@@ -196,9 +246,14 @@ where
                 });
 
                 encoder.scopes.push(Scope::default());
-                encoder.insert(param);
+                for param in parameter_list {
+                    let arg = encoder.insert(param.name);
+                    encoder.blocks[encoder.current_block]
+                        .instructions
+                        .push(Mir::PopArgument { arg })
+                }
 
-                encode_iter(&mut encoder, body)?;
+                let ret = encoder.encode((body as &mut _, Self::temp))?;
 
                 let stack_frame = StackFrame::new(
                     encoder.blocks,
@@ -214,17 +269,18 @@ where
                     .push(Mir::CreateFunc {
                         binding,
                         stack_frame,
+                        ret,
                     });
 
                 Some(binding)
             }
-            Expr::BinOp(op, left, right) => {
+            Expr::BinOp(op, ref mut left, ref mut right) => {
                 use core_hir::Operator;
                 use core_mir::BinOpType;
                 use core_tokens::sym;
 
-                let left = self.encode(left)?;
-                let right = self.encode(right)?;
+                let left = self.encode((left as &mut _, Self::temp))?;
+                let right = self.encode((right as &mut _, Self::temp))?;
 
                 let op = match op {
                     Operator::Keyword(_) => return None,
@@ -277,7 +333,6 @@ impl<'tcx, 'idt, 'str, 'hir> Encode<Node<Hir<'str, 'idt, 'hir>>> for Encoder<'id
 
     fn encode(&mut self, value: Node<Hir<'str, 'idt, 'hir>>) -> Option<Self::Output> {
         match value.val {
-            Hir::Rec(infallible, _) => match infallible {},
             Hir::Scope(inner) => self.encode(inner)?,
             Hir::Loop(inner) => {
                 let start = self.new_block();

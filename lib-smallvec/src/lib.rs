@@ -488,6 +488,17 @@ impl<T: Clone> From<&[T]> for SmallVec<T> {
     }
 }
 
+impl<T> From<SmallVec<T>> for Vec<T> {
+    fn from(vec: SmallVec<T>) -> Self {
+        if vec.cap <= SmallVec::<T>::inline_capacity() {
+            vec.into_iter().collect()
+        } else {
+            let mut vec = ManuallyDrop::new(vec);
+            unsafe { Vec::from_raw_parts(vec.as_mut_ptr(), vec.len.assume_init(), vec.cap) }
+        }
+    }
+}
+
 impl<'a, T> IntoIterator for &'a SmallVec<T> {
     type Item = &'a T;
     type IntoIter = std::slice::Iter<'a, T>;
