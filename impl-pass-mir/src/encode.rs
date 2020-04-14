@@ -1,24 +1,13 @@
 use core_hir::{BindingMode, Expr, Hir, Literal, Node, Pattern, SimpleExpr};
-use core_mir::{Load, Mir, Reg};
+use core_mir::{Load, Reg};
 use core_tokens::Ident;
 
 use std::collections::{HashMap, HashSet};
 
-use vec_utils::VecExt;
+use super::*;
 
 pub struct Context {
     // pub types: &'tcx Cache<Type>,
-}
-
-pub struct Block {
-    pub mir: Vec<Mir>,
-    pub parents: HashSet<usize>,
-    pub children: HashSet<usize>,
-}
-
-pub struct MirDigest {
-    pub blocks: Vec<Option<Block>>,
-    pub max_reg_count: usize,
 }
 
 struct Loop<'idt> {
@@ -52,23 +41,27 @@ pub fn write<
     H: IntoIterator<Item = Node<Hir<'str, 'idt, 'hir>>>,
 >(
     hir: H,
-) -> Option<MirDigest> {
+) -> Option<StackFrame> {
     let mut encoder = Encoder::default();
 
     encoder.blocks.push(Block {
-        mir: Vec::new(),
-        parents: HashSet::new(),
-        children: HashSet::new(),
+        instructions: Vec::new(),
+        meta: BlockMeta {
+            parents: HashSet::new(),
+            children: HashSet::new(),
+        },
     });
 
     encoder.scopes.push(Scope::default());
 
     encode_iter(&mut encoder, hir)?;
 
-    Some(MirDigest {
-        blocks: encoder.blocks.map(Some),
-        max_reg_count: encoder.max_reg_count,
-    })
+    StackFrame::new(
+        encoder.blocks,
+        FrameMeta {
+            max_reg_count: encoder.max_reg_count,
+        },
+    )
 }
 
 fn encode_iter<
@@ -135,9 +128,11 @@ impl<'tcx, 'idt, 'str, 'hir> Encoder<'idt> {
         let target = self.blocks.len();
 
         self.blocks.push(Block {
-            mir: Vec::new(),
-            parents: HashSet::new(),
-            children: HashSet::new(),
+            instructions: Vec::new(),
+            meta: BlockMeta {
+                parents: HashSet::new(),
+                children: HashSet::new(),
+            },
         });
 
         target
@@ -158,44 +153,134 @@ impl<'tcx, 'idt, 'str, 'hir> Encoder<'idt> {
     }
 
     fn jump(&mut self, from: usize, to: usize) {
-        self.blocks[from].mir.push(Mir::Jump(to));
-        self.blocks[to].parents.insert(from);
-        self.blocks[from].children.insert(to);
+        self.blocks[from].instructions.push(Mir::Jump(to));
+        self.blocks[to].meta.parents.insert(from);
+        self.blocks[from].meta.children.insert(to);
     }
 
     fn branch(&mut self, cond: Reg, from: usize, to: usize) {
         self.blocks[from]
-            .mir
+            .instructions
             .push(Mir::BranchTrue { cond, target: to });
-        self.blocks[to].parents.insert(from);
-        self.blocks[from].children.insert(to);
+        self.blocks[to].meta.parents.insert(from);
+        self.blocks[from].meta.children.insert(to);
     }
 }
 
-impl<'tcx, 'idt, 'str, F> Encode<(Node<Expr<'str, 'idt>>, F)> for Encoder<'idt>
+impl<'tcx, 'idt, 'str, 'hir, F> Encode<(Node<Expr<'str, 'idt, 'hir>>, F)> for Encoder<'idt>
 where
     F: FnOnce(&mut Self) -> Reg,
 {
     type Output = Reg;
 
-    fn encode(&mut self, (value, to): (Node<Expr<'str, 'idt>>, F)) -> Option<Self::Output> {
+    fn encode(
+        &mut self,
+        (mut value, to): (Node<Expr<'str, 'idt, 'hir>>, F),
+    ) -> Option<Self::Output> {
+        self.encode((&mut value, to))
+    }
+}
+
+impl<'tcx, 'idt, 'str, 'hir, F> Encode<(&mut Node<Expr<'str, 'idt, 'hir>>, F)> for Encoder<'idt>
+where
+    F: FnOnce(&mut Self) -> Reg,
+{
+    type Output = Reg;
+
+    fn encode(
+        &mut self,
+        (value, to): (&mut Node<Expr<'str, 'idt, 'hir>>, F),
+    ) -> Option<Self::Output> {
         let reg;
 
         match value.val {
-            Expr::PreOp(op, right) => todo!("preop"),
-            Expr::PostOp(op, left) => todo!("postop"),
-            Expr::Tuple(lit) => todo!("tuple"),
+            Expr::PreOp(op, ref right) => todo!("preop"),
+            Expr::PostOp(op, ref left) => todo!("postop"),
+            Expr::Tuple(ref lit) => todo!("tuple"),
             Expr::Simple(simple) => {
                 let to = to(self);
                 self.encode((simple, to))
             }
-            Expr::BinOp(op, left, right) => {
+            Expr::Scope(ref mut scope) => {
+                self.encode(std::mem::take(scope))?;
+                let reg = to(self); // TODO: initialize the return register
+                Some(reg)
+            }
+            Expr::FuncApp { ref mut name_args } => {
+                let (name, args) = name_args.split_at_mut(1);
+                let name = &mut name[0];
+                let name = self.encode((name, Self::temp))?;
+
+                let mut reg_args = Vec::with_capacity(args.len());
+
+                for arg in args {
+                    reg_args.push(Mir::PushArguement {
+                        arg: self.encode((arg, Self::temp))?,
+                    });
+                }
+
+                let ret = to(self);
+                let block = &mut self.blocks[self.current_block];
+
+                block.instructions.reserve(reg_args.len() + 2);
+                block
+                    .instructions
+                    .push(Mir::LoadFunction { func: name, ret });
+                block.instructions.extend(reg_args);
+                block.instructions.push(Mir::CallFunction);
+
+                Some(ret)
+            }
+            Expr::Func {
+                ref parameter_list,
+                ref mut body,
+            } => {
+                let mut encoder = Encoder::default();
+
+                encoder.blocks.push(Block {
+                    instructions: Vec::new(),
+                    meta: BlockMeta {
+                        parents: HashSet::new(),
+                        children: HashSet::new(),
+                    },
+                });
+
+                encoder.scopes.push(Scope::default());
+                for param in parameter_list {
+                    let arg = encoder.insert(param.name);
+                    encoder.blocks[encoder.current_block]
+                        .instructions
+                        .push(Mir::PopArgument { arg })
+                }
+
+                let ret = encoder.encode((body as &mut _, Self::temp))?;
+
+                let stack_frame = StackFrame::new(
+                    encoder.blocks,
+                    FrameMeta {
+                        max_reg_count: encoder.max_reg_count,
+                    },
+                )?;
+
+                let binding = to(self);
+
+                self.blocks[self.current_block]
+                    .instructions
+                    .push(Mir::CreateFunc {
+                        binding,
+                        stack_frame,
+                        ret,
+                    });
+
+                Some(binding)
+            }
+            Expr::BinOp(op, ref mut left, ref mut right) => {
                 use core_hir::Operator;
                 use core_mir::BinOpType;
                 use core_tokens::sym;
 
-                let left = self.encode(left)?;
-                let right = self.encode(right)?;
+                let left = self.encode((left as &mut _, Self::temp))?;
+                let right = self.encode((right as &mut _, Self::temp))?;
 
                 let op = match op {
                     Operator::Keyword(_) => return None,
@@ -218,12 +303,14 @@ where
 
                 reg = to(self);
 
-                self.blocks[self.current_block].mir.push(Mir::BinOp {
-                    op,
-                    out: reg,
-                    left,
-                    right,
-                });
+                self.blocks[self.current_block]
+                    .instructions
+                    .push(Mir::BinOp {
+                        op,
+                        out: reg,
+                        left,
+                        right,
+                    });
                 Some(reg)
             }
         }
@@ -246,7 +333,6 @@ impl<'tcx, 'idt, 'str, 'hir> Encode<Node<Hir<'str, 'idt, 'hir>>> for Encoder<'id
 
     fn encode(&mut self, value: Node<Hir<'str, 'idt, 'hir>>) -> Option<Self::Output> {
         match value.val {
-            Hir::Rec(infallible, _) => match infallible {},
             Hir::Scope(inner) => self.encode(inner)?,
             Hir::Loop(inner) => {
                 let start = self.new_block();
@@ -287,7 +373,7 @@ impl<'tcx, 'idt, 'str, 'hir> Encode<Node<Hir<'str, 'idt, 'hir>>> for Encoder<'id
             } => todo!("continue"),
             Hir::Print(id) => {
                 let print = self.get(id).map(Mir::Print)?;
-                self.blocks[self.current_block].mir.push(print);
+                self.blocks[self.current_block].instructions.push(print);
             }
             Hir::Let { pat, value } => {
                 let to = |this: &mut Self| match pat.val {
@@ -405,7 +491,7 @@ impl<'idt, 'str> Encode<(Node<SimpleExpr<'str, 'idt>>, Reg)> for Encoder<'idt> {
             SimpleExpr::Ident(ident) => match self.get(ident) {
                 Some(from) => {
                     self.blocks[self.current_block]
-                        .mir
+                        .instructions
                         .push(Mir::LoadReg { to, from });
                     Some(to)
                 }
@@ -445,7 +531,7 @@ impl<'idt, 'str> Encode<(Literal<'str>, Reg)> for Encoder<'idt> {
         };
 
         self.blocks[self.current_block]
-            .mir
+            .instructions
             .push(Mir::Load { to, from });
 
         Some(to)

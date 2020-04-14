@@ -27,7 +27,6 @@ impl<'idt> Type<'idt> {
     }
 
     pub fn with_size(self, size: usize) -> Self {
-        assert!(size.is_power_of_two());
         Self { size, ..self }
     }
 

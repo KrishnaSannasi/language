@@ -249,6 +249,7 @@ impl<'input, 'str, 'idt> core_tokens::Lexer<'str, 'idt> for Lexer<'input, 'str, 
             while let Some(c) = self.input.get(0..2) {
                 let ty = match c {
                     "=>" => Symbol(sym!(=>)),
+                    "->" => Symbol(sym!(->)),
                     "<=" => Symbol(sym!(<=)),
                     ">=" => Symbol(sym!(>=)),
                     "==" => Symbol(sym!(==)),
@@ -479,6 +480,7 @@ impl<'input, 'str, 'idt> core_tokens::Lexer<'str, 'idt> for Lexer<'input, 'str, 
         while let Some(c) = self.input.get(0..2) {
             let ty = match c {
                 "=>" => sym!(=>),
+                "->" => sym!(->),
                 "<=" => sym!(<=),
                 ">=" => sym!(>=),
                 "==" => sym!(==),

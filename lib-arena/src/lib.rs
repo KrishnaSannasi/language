@@ -5,7 +5,8 @@
     const_panic,
     dropck_eyepatch,
     optin_builtin_traits,
-    hash_set_entry
+    hash_set_entry,
+    negative_impls
 )]
 
 pub mod cache;

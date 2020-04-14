@@ -1,4 +1,4 @@
-use std::alloc::{alloc, dealloc, handle_alloc_error, Layout};
+use std::alloc::{alloc, dealloc, Layout};
 
 pub struct StackFrame {
     frame: *mut u8,

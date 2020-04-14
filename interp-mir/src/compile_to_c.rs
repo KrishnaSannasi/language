@@ -1,6 +1,6 @@
 use core_mir::{BinOpType, Load, Mir, PreOpType, Reg};
 use core_types::{Primitive, Ty, Type, Variant};
-use impl_pass_mir::encode::MirDigest;
+use impl_pass_mir::StackFrame;
 use std::io::{self, Write};
 
 use std::alloc::Layout;
@@ -69,7 +69,7 @@ pub fn layout(types: &[Ty<'_, '_>]) -> (Vec<usize>, Layout) {
 }
 
 pub fn emit_c(
-    digest: MirDigest,
+    digest: StackFrame,
     mut writer: impl Write,
     ident: &lib_intern::Interner,
 ) -> io::Result<()> {
@@ -89,7 +89,7 @@ impl std::fmt::Display for GetLocal<'_, '_> {
 }
 
 fn write_c<'idt>(
-    digest: MirDigest,
+    digest: StackFrame,
     writer: &mut dyn Write,
     ident: &'idt lib_intern::Interner,
 ) -> io::Result<()> {
@@ -131,14 +131,9 @@ fn write_c<'idt>(
         align = layout.align()
     );
 
-    for (block_idx, block) in digest
-        .blocks
-        .iter()
-        .enumerate()
-        .flat_map(|(i, x)| Some((i, x.as_ref()?)))
-    {
+    for (block_idx, block) in digest.blocks().iter().enumerate() {
         emit!("\n_label_{}:\n", block_idx);
-        for mir in block.mir.iter() {
+        for mir in block.instructions.iter() {
             match *mir {
                 Mir::Jump(j) => {
                     emit!("goto _label_{};\n", j);
@@ -267,11 +262,23 @@ fn write_c<'idt>(
                         )
                     }
                 },
-                Mir::PreOp { op, out, arg } => todo!(),
+                Mir::PreOp { op, out, arg } => todo!("comp2c preop"),
+                Mir::CreateFunc {
+                    binding,
+                    ret,
+                    ref stack_frame,
+                } => {
+                    if types[binding.0].size == 0 {
+                        continue;
+                    }
+
+                    todo!("comp2c stateful-func")
+                }
+                _ => todo!("comp2c extra"),
             }
         }
 
-        if block.children.is_empty() {
+        if block.meta.children.is_empty() {
             emit!("return 0;\n");
         }
     }

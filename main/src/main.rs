@@ -20,18 +20,25 @@ fn main() -> std::io::Result<()> {
             long_strings: &long_strings,
             max_small_string_size: 64,
         };
-
         let lexer = impl_lexer::Lexer::new(&file, context);
 
         let arena = LocalUniqueArena::new();
-        let context = impl_pass_hir::Context { arena: &arena };
+        let exprs = LocalUniqueArena::new();
+        let context = impl_pass_hir::Context {
+            arena: &arena,
+            exprs: &exprs,
+        };
         let hir_parser = impl_pass_hir::HirParser::new(lexer, context);
 
-        impl_pass_mir::encode::write(hir_parser).expect("hi")
+        impl_pass_mir::encode::write(hir_parser).expect("could not encode for some reason")
     };
 
     let ty_ctx = Cache::new();
     let ident = Interner::new();
+
+    println!("CODE");
+    println!("{}", digest);
+
     let types = impl_pass_mir::type_check::infer_types(
         &digest,
         impl_pass_mir::type_check::Context {
@@ -41,33 +48,16 @@ fn main() -> std::io::Result<()> {
     )
     .unwrap();
 
-    println!("CODE");
-
-    let blocks = digest
-        .blocks
-        .iter()
-        .enumerate()
-        .filter_map(|(i, block)| match block {
-            Some(block) => Some((i, block)),
-            None => None,
-        });
-
-    for (i, block) in blocks.clone() {
-        println!("BLOCK({:3})", i);
-        for (i, mir) in block.mir.iter().enumerate() {
-            println!("{:3}: {:?}", i, mir);
-        }
-        println!()
-    }
-
+    println!("CODE (type checked)");
+    println!("{}", digest);
     println!("\nBLOCK DATA");
 
-    for (i, block) in blocks {
+    for (i, block) in digest.blocks().iter().enumerate() {
         println!(
             "BLOCK({}):\
             \n\tparents: {:?}\
             \n\tchildren: {:?}",
-            i, block.parents, block.children
+            i, block.meta.parents, block.meta.children
         );
     }
 
@@ -86,7 +76,7 @@ fn main() -> std::io::Result<()> {
     let ty_names = lib_intern::Interner::new();
     interp_mir::emit_c(digest, &file, &ty_names)?;
 
-    std::process::Command::new("gcc")
+    let out = std::process::Command::new("gcc")
         .arg("-Iinc")
         .arg("-c")
         .arg("target_c/fragments/test.c")

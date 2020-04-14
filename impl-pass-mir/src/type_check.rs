@@ -4,9 +4,14 @@ use core_types::{Primitive, Ty, Type, Variant};
 use lib_arena::cache::Cache;
 use lib_intern::Interner;
 
-use crate::encode::MirDigest;
+use super::*;
 
 use vec_utils::VecExt;
+
+use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicU64, Ordering::Relaxed};
+
+static FUNC_ID: AtomicU64 = AtomicU64::new(0);
 
 pub struct Context<'idt, 'tcx> {
     pub ident: &'idt Interner,
@@ -29,14 +34,17 @@ impl Infer<'_, '_> {
 }
 
 pub fn infer_types<'tcx, 'idt>(
-    mir: &MirDigest,
+    frame: &StackFrame,
     ctx: Context<'idt, 'tcx>,
 ) -> Option<Vec<Ty<'idt, 'tcx>>> {
-    let mut types = (0..mir.max_reg_count).map(Infer::Inf).collect::<Vec<_>>();
+    let mut types = (0..frame.meta.max_reg_count)
+        .map(Infer::Inf)
+        .collect::<Vec<_>>();
 
     macro_rules! register {
         ($(
-            $ty_var:ident = $ty_name:ident {
+            $ty_var:ident {
+                name: $name:expr,
                 size: $size:expr,
                 align: $align:expr,
                 variant: $variant:expr,
@@ -44,7 +52,7 @@ pub fn infer_types<'tcx, 'idt>(
         )*) => {$(
             let $ty_var = ctx.ty.insert(
                 Type::new(
-                    core_tokens::Ident::new(ctx.ident.insert(stringify!($ty_name))),
+                    core_tokens::Ident::new(ctx.ident.insert(&$name)),
                     $variant,
                 )
                     .with_size($size)
@@ -54,13 +62,15 @@ pub fn infer_types<'tcx, 'idt>(
     }
 
     register! {
-        bool_ty = bool {
+        bool_ty {
+            name: "bool",
             size: 1,
             align: 1,
             variant: Variant::Primitive(Primitive::Bool),
         }
 
-        i32_ty = i32 {
+        i32_ty {
+            name: "i32",
             size: 4,
             align: 4,
             variant: Variant::Primitive(Primitive::I32),
@@ -108,10 +118,10 @@ pub fn infer_types<'tcx, 'idt>(
         }};
     };
 
-    for block in mir.blocks.iter().flatten() {
-        for mir in block.mir.iter() {
+    for block in frame.blocks().iter() {
+        for mir in block.instructions.iter() {
             match *mir {
-                Mir::Jump(_) | Mir::Print(_) => {
+                Mir::CallFunction | Mir::Jump(_) | Mir::Print(_) => {
                     // no types can be gleaned from a print/jump
                 }
                 Mir::BranchTrue {
@@ -165,6 +175,34 @@ pub fn infer_types<'tcx, 'idt>(
                     }
                 },
                 Mir::PreOp { .. } => {}
+                Mir::CreateFunc {
+                    binding: Reg(binding),
+                    ret: Reg(ret),
+                    ref stack_frame,
+                } => {
+                    let id = FUNC_ID.fetch_add(1, Relaxed);
+
+                    if id > (u64::max_value() >> 1) {
+                        panic!("tried to create too many functions!")
+                    }
+
+                    register! {
+                        func_ty {
+                            name: format!("_user_function_{}", id),
+                            size: 0,
+                            align: 1,
+                            variant: Variant::Struct { fields: BTreeMap::new() },
+                        }
+                    }
+
+                    write_type!(binding <- Infer::Ty(func_ty));
+                }
+                Mir::LoadFunction {
+                    func: Reg(func),
+                    ret: Reg(ret),
+                } => {}
+                Mir::PopArgument { arg: Reg(func) } => {}
+                Mir::PushArguement { arg: Reg(func) } => {}
             }
         }
     }
