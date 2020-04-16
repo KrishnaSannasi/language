@@ -1,18 +1,18 @@
 use core_tokens::Ident;
 use std::collections::BTreeMap;
 
-pub type Ty<'idt, 'tcx> = &'tcx Type<'idt>;
+pub type Ty<'idt, 'tcx> = &'tcx Type<'idt, 'tcx>;
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-pub struct Type<'idt> {
+pub struct Type<'idt, 'tcx> {
     pub name: Ident<'idt>,
-    pub ty: Variant<'idt>,
+    pub ty: Variant<'idt, 'tcx>,
     pub size: usize,
     align: usize,
 }
 
-impl<'idt> Type<'idt> {
-    pub const fn new(name: Ident<'idt>, ty: Variant<'idt>) -> Self {
+impl<'idt, 'tcx> Type<'idt, 'tcx> {
+    pub const fn new(name: Ident<'idt>, ty: Variant<'idt, 'tcx>) -> Self {
         Self {
             name,
             ty,
@@ -36,11 +36,16 @@ impl<'idt> Type<'idt> {
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
-pub enum Variant<'idt> {
+pub enum Variant<'idt, 'tcx> {
     Primitive(Primitive),
     Trait {},
     Struct {
-        fields: BTreeMap<Ident<'idt>, usize>,
+        fields: Option<BTreeMap<Ident<'idt>, Ty<'idt, 'tcx>>>,
+    },
+    Function {
+        captures: BTreeMap<Ident<'idt>, Ty<'idt, 'tcx>>,
+        arguments: Vec<Ty<'idt, 'tcx>>,
+        return_type: Ty<'idt, 'tcx>,
     },
 }
 
